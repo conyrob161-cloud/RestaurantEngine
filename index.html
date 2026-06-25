@@ -3,16 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>Restaurant Engine</title>
+  <meta name="theme-color" content="#10131a" />
+  <title>Restaurant Engine 3D</title>
   <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 </head>
 <body>
   <div id="app">
-    <canvas id="game" aria-label="Game canvas"></canvas>
+    <canvas id="game" aria-label="3D game canvas"></canvas>
 
     <div class="hud">
       <div class="panel">
-        <div class="panel-title">Restaurant Engine</div>
+        <div class="panel-title">Restaurant Engine 3D</div>
         <div class="stats">
           <div><span>Peníze</span><strong id="money">0</strong></div>
           <div><span>Suroviny</span><strong id="stock">0</strong></div>
@@ -25,7 +27,7 @@
     </div>
 
     <div class="top-actions">
-      <button id="spawnBtn">Přivolat zákazníka</button>
+      <button id="spawnBtn">Přivolat hosta</button>
       <button id="buyStockBtn">Suroviny (5)</button>
       <button id="upgradeCarryBtn" class="secondary">Kapacita</button>
       <button id="upgradeOvenBtn" class="secondary">Pec</button>
@@ -38,7 +40,7 @@
     <div class="footer">
       <div class="help">
         Ovládání: WASD / šipky nebo joystick vlevo dole. E / tlačítko vpravo = interakce.
-        Základ enginu: kamera, pohyb, kolize, pec, zákazníci a ukládání.
+        Tohle je už skutečný 3D základ, ne canvas prototyp.
       </div>
       <button id="actionBtn" class="action">E</button>
     </div>
