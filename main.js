@@ -1,0 +1,1 @@
+document.addEventListener('DOMContentLoaded',()=>{console.log('Restaurant Engine started');const p=document.createElement('p');p.textContent='Build 0.1 running';document.getElementById('app').appendChild(p);});
