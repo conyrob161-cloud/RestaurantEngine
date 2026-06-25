@@ -6,8 +6,8 @@
 - JavaScript
 
 ## Milestone 0.2
-- PlayCanvas integration
-- Fixed 45 degree camera
+- 3D WebGL engine
+- Fixed camera
 - Mobile joystick
 - Player movement
 
@@ -16,3 +16,9 @@
 - Interactions
 - Item carrying
 - Customers
+
+## Milestone 0.4
+- Save and load
+- Upgrades
+- Better pacing
+- Zombie-themed conversion
