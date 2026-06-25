@@ -1,16 +1,52 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="cs">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Restaurant Engine</title>
-<link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Restaurant Engine</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-<div id="app">
-<h1>Restaurant Engine</h1>
-<p>Engine foundation is under construction.</p>
-</div>
-<script src="main.js"></script>
+  <div id="app">
+    <canvas id="game" aria-label="Game canvas"></canvas>
+
+    <div class="hud">
+      <div class="panel">
+        <div class="panel-title">Restaurant Engine</div>
+        <div class="stats">
+          <div><span>Peníze</span><strong id="money">0</strong></div>
+          <div><span>Suroviny</span><strong id="stock">0</strong></div>
+          <div><span>Neseno</span><strong id="carry">0</strong></div>
+          <div><span>V peci</span><strong id="oven">0</strong></div>
+          <div><span>Čeká</span><strong id="waiting">0</strong></div>
+          <div><span>Reputace</span><strong id="rep">0</strong></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="top-actions">
+      <button id="spawnBtn">Přivolat zákazníka</button>
+      <button id="buyStockBtn">Suroviny (5)</button>
+      <button id="upgradeCarryBtn" class="secondary">Kapacita</button>
+      <button id="upgradeOvenBtn" class="secondary">Pec</button>
+      <button id="saveBtn" class="ghost">Uložit</button>
+      <button id="resetBtn" class="ghost">Reset</button>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <div class="footer">
+      <div class="help">
+        Ovládání: WASD / šipky nebo joystick vlevo dole. E / tlačítko vpravo = interakce.
+        Základ enginu: kamera, pohyb, kolize, pec, zákazníci a ukládání.
+      </div>
+      <button id="actionBtn" class="action">E</button>
+    </div>
+
+    <div class="mobile-controls">
+      <div class="stick" id="stick"><div class="nub" id="nub"></div></div>
+    </div>
+  </div>
+  <script src="main.js"></script>
 </body>
 </html>
