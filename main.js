@@ -29,10 +29,10 @@
 
   const map = Array.from({ length: GRID_H }, () => Array(GRID_W).fill(0));
   const tables = [
-    { gx: 6, gz: 9, occupied: false, customerId: null, waitingMoney: 0, serveCount: 0 },
-    { gx: 13, gz: 9, occupied: false, customerId: null, waitingMoney: 0, serveCount: 0 },
-    { gx: 6, gz: 14, occupied: false, customerId: null, waitingMoney: 0, serveCount: 0 },
-    { gx: 13, gz: 14, occupied: false, customerId: null, waitingMoney: 0, serveCount: 0 }
+    { gx: 6, gz: 9, seat: { gx: 6, gz: 10 }, occupied: false, customerId: null, waitingMoney: 0, serveCount: 0 },
+    { gx: 13, gz: 9, seat: { gx: 13, gz: 10 }, occupied: false, customerId: null, waitingMoney: 0, serveCount: 0 },
+    { gx: 6, gz: 14, seat: { gx: 6, gz: 15 }, occupied: false, customerId: null, waitingMoney: 0, serveCount: 0 },
+    { gx: 13, gz: 14, seat: { gx: 13, gz: 15 }, occupied: false, customerId: null, waitingMoney: 0, serveCount: 0 }
   ];
 
   const world = {
@@ -40,8 +40,7 @@
     oven: { gx: 6, gz: 4, stack: 0, timer: 0, interval: 4.2, maxStack: 10 },
     counter: { gx: 9, gz: 4 },
     cash: { gx: 16, gz: 3 },
-    entrance: { gx: 10, gz: 18 },
-    exit: { gx: 10, gz: 19 },
+    entrance: { gx: 10, gz: 18 }
   };
 
   const state = {
@@ -67,9 +66,7 @@
     const oy = canvas.height / 2 - (state.player.x + state.player.z) * (TILE_H / 2) + 20;
     return { x: (x - z) * (TILE_W / 2) + ox, y: (x + z) * (TILE_H / 2) + oy };
   }
-  function worldToCell(x, z) {
-    return { gx: Math.floor(x), gz: Math.floor(z) };
-  }
+  function worldToCell(x, z) { return { gx: Math.floor(x), gz: Math.floor(z) }; }
   function cellBlocked(gx, gz) {
     if (gx < 0 || gz < 0 || gx >= GRID_W || gz >= GRID_H) return true;
     return map[gz][gx] === 1;
@@ -80,13 +77,20 @@
 
   function buildMap() {
     for (let gx = 0; gx < GRID_W; gx++) {
-      mark(gx, 0); mark(gx, GRID_H - 1);
+      mark(gx, 0);
+      mark(gx, GRID_H - 1);
     }
     for (let gz = 0; gz < GRID_H; gz++) {
-      mark(0, gz); mark(GRID_W - 1, gz);
+      mark(0, gz);
+      mark(GRID_W - 1, gz);
     }
-    for (let gx = 1; gx < GRID_W - 1; gx++) if (gx !== world.entrance.gx) mark(gx, 7);
-    for (let gz = 1; gz < 7; gz++) { mark(4, gz); mark(15, gz); }
+    for (let gx = 1; gx < GRID_W - 1; gx++) {
+      if (gx !== world.entrance.gx) mark(gx, 7);
+    }
+    for (let gz = 1; gz < 7; gz++) {
+      mark(4, gz);
+      mark(15, gz);
+    }
     mark(world.stock.gx, world.stock.gz);
     mark(world.oven.gx, world.oven.gz);
     mark(world.counter.gx, world.counter.gz);
@@ -222,8 +226,8 @@
   function recalcPath(c) {
     const start = worldToCell(c.x, c.z);
     const goal = c.state === 'leaving'
-      ? { gx: world.exit.gx, gz: world.exit.gz }
-      : { gx: tables[c.tableIndex].gx, gz: tables[c.tableIndex].gz };
+      ? { gx: world.entrance.gx, gz: world.entrance.gz }
+      : tables[c.tableIndex].seat;
     c.path = bfs(start, goal);
     c.pathIndex = 0;
   }
@@ -392,8 +396,9 @@
         const dz = node.gz - c.z;
         const d = Math.hypot(dx, dz);
         if (d < 0.06) {
-          if (c.pathIndex < c.path.length - 1) c.pathIndex++;
-          else if (c.state === 'walking') {
+          if (c.pathIndex < c.path.length - 1) {
+            c.pathIndex++;
+          } else if (c.state === 'walking') {
             c.state = 'waitingPizza';
             c.waitTimer = 55 + Math.random() * 10;
             toast('Zákazník sedí', 'Čeká na pizzu.');
@@ -437,6 +442,19 @@
     state.particles = state.particles.filter(p => p.life > 0);
   }
 
+  function closestTable() {
+    let best = 0;
+    let bestD = Infinity;
+    tables.forEach((t, i) => {
+      const d = dist(state.player.x, state.player.z, t.gx, t.gz);
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    });
+    return best;
+  }
+
   function updateUI() {
     ui.money.textContent = Math.floor(state.money);
     ui.stock.textContent = state.stock;
@@ -449,16 +467,6 @@
     state.selectedTable = closestTable();
   }
 
-  function closestTable() {
-    let best = 0;
-    let bestD = Infinity;
-    tables.forEach((t, i) => {
-      const d = dist(state.player.x, state.player.z, t.gx, t.gz);
-      if (d < bestD) { bestD = d; best = i; }
-    });
-    return best;
-  }
-
   function drawDiamond(x, y, w, h, fill, stroke = null) {
     ctx.beginPath();
     ctx.moveTo(x, y - h / 2);
@@ -468,7 +476,10 @@
     ctx.closePath();
     ctx.fillStyle = fill;
     ctx.fill();
-    if (stroke) { ctx.strokeStyle = stroke; ctx.stroke(); }
+    if (stroke) {
+      ctx.strokeStyle = stroke;
+      ctx.stroke();
+    }
   }
 
   function drawWall(gx, gz, height, base) {
@@ -512,6 +523,17 @@
     drawDiamond(p.x, p.y, TILE_W, TILE_H, parity ? '#ecd3ab' : '#e3c58f', 'rgba(0,0,0,.06)');
   }
 
+  function drawChair(gx, gz) {
+    const p = tileToScreen(gx + 0.5, gz + 0.5);
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    drawDiamond(0, 0, 24, 14, '#7b5a44', 'rgba(0,0,0,.18)');
+    ctx.fillStyle = '#9a7156';
+    ctx.fillRect(-4, -14, 8, 18);
+    ctx.fillRect(-8, 2, 16, 3);
+    ctx.restore();
+  }
+
   function drawTable(t, selected) {
     const p = tileToScreen(t.gx + 0.5, t.gz + 0.5);
     ctx.save();
@@ -529,6 +551,7 @@
       ctx.fillText(`€${t.waitingMoney}`, 0, -30);
     }
     ctx.restore();
+    drawChair(t.seat.gx, t.seat.gz);
   }
 
   function drawEntity(x, z, body, top, label) {
@@ -581,15 +604,12 @@
 
     const visible = [];
     for (let gz = 0; gz < GRID_H; gz++) {
-      for (let gx = 0; gx < GRID_W; gx++) {
-        visible.push({ gx, gz, z: gx + gz });
-      }
+      for (let gx = 0; gx < GRID_W; gx++) visible.push({ gx, gz, z: gx + gz });
     }
     visible.sort((a, b) => a.z - b.z);
 
     for (const c of visible) drawFloorTile(c.gx, c.gz);
 
-    // Outer walls and inner walls for the room.
     for (let gx = 0; gx < GRID_W; gx++) {
       if (gx !== world.entrance.gx) drawWall(gx, 0, 2.6, '#916047');
       drawWall(gx, GRID_H - 1, 2.6, '#916047');
@@ -607,7 +627,6 @@
       drawWall(15, gz, 2.2, '#8e5d44');
     }
 
-    // Props.
     drawEntity(world.stock.gx, world.stock.gz, '#6fd0ff', '#dbf5ff', 'SKLAD');
     drawEntity(world.oven.gx, world.oven.gz, '#ff8c66', '#ffd5c4', 'PEC');
     drawEntity(world.counter.gx, world.counter.gz, '#8fe08f', '#e7ffd5', 'KAPACITA');
@@ -616,7 +635,6 @@
 
     for (let i = 0; i < tables.length; i++) drawTable(tables[i], i === state.selectedTable);
 
-    // Customers.
     for (const c of state.customers) {
       if (c.state === 'gone') continue;
       const body = c.state === 'eating' ? '#ffcf6f' : c.state === 'leaving' ? '#ff7a7a' : '#5577cc';
@@ -625,11 +643,9 @@
       if (c.state === 'eating') drawStack(c.x, c.z, 1);
     }
 
-    // Player.
     drawEntity(state.player.x, state.player.z, '#27406d', '#f2d1b5', '');
     drawStack(state.player.x, state.player.z, state.carry);
 
-    // Particles.
     for (const p of state.particles) {
       const s = tileToScreen(p.x + 0.5, p.z + 0.5);
       ctx.save();
@@ -641,7 +657,6 @@
       ctx.restore();
     }
 
-    // Soft vignette.
     const v = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, Math.min(canvas.width, canvas.height) * 0.15, canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height) * 0.75);
     v.addColorStop(0, 'rgba(0,0,0,0)');
     v.addColorStop(1, 'rgba(0,0,0,.24)');
