@@ -73,21 +73,22 @@
   function buildSoftRig(type, palette, seedText) {
     const rig = new THREE.Group();
     rig.name = 'soft_character_rig';
+    rig.position.y = 0.47;
 
     const shadow = new THREE.Mesh(
       new THREE.CircleGeometry(0.42, 24),
       new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.18 })
     );
     shadow.rotation.x = -Math.PI / 2;
-    shadow.position.y = 0.01;
+    shadow.position.y = -0.46;
     rig.add(shadow);
 
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.26, 0.62, 4, 6), mat(type === 'chef' ? 0xf8f6f0 : palette.shirt, 0.92));
-    body.position.y = 0.98;
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.26, 0.58, 4, 6), mat(type === 'chef' ? 0xf8f6f0 : palette.shirt, 0.92));
+    body.position.y = 0.92;
     rig.add(body);
 
     const hips = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.18, 4, 6), mat(type === 'chef' ? 0x70533d : palette.pants, 0.98));
-    hips.position.y = 0.42;
+    hips.position.y = 0.34;
     rig.add(hips);
 
     const head = new THREE.Group();
@@ -101,7 +102,7 @@
     eyeL.position.set(-0.09, 0.04, 0.27);
     eyeR.position.set(0.09, 0.04, 0.27);
     head.add(skull, face, nose, eyeL, eyeR);
-    head.position.y = 1.82;
+    head.position.y = 1.78;
     rig.add(head);
 
     const armL = new THREE.Group();
@@ -119,7 +120,7 @@
       lower.position.y = -0.48;
       hand.position.y = -0.72;
       arm.add(upper, lower, hand);
-      arm.position.set(side * 0.42, 1.08, 0);
+      arm.position.set(side * 0.42, 1.0, 0);
       arm.rotation.z = side * -0.12;
       return arm;
     }
@@ -143,7 +144,7 @@
       calf.position.y = -0.45;
       shoe.position.y = -0.68;
       leg.add(thigh, calf, shoe);
-      leg.position.set(side * 0.15, 0.25, 0.01);
+      leg.position.set(side * 0.15, 0.22, 0.01);
       leg.rotation.z = side * 0.04;
       return leg;
     }
@@ -164,25 +165,25 @@
       puff3.position.set(0.09, 0.2, 0);
       band.position.y = -0.02;
       hat.add(band, puff1, puff2, puff3);
-      hat.position.y = 2.22;
+      hat.position.y = 2.14;
     } else if (type === 'player') {
       const cap = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.12, 0.26), mat(0x24324c, 0.86));
       const brim = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.05, 0.16), mat(palette.accent, 0.84));
       brim.position.set(0, -0.02, 0.14);
       cap.position.y = 0.06;
       hat.add(cap, brim);
-      hat.position.y = 2.06;
+      hat.position.y = 1.99;
       const backpack = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.34, 0.14), mat(0x2b4672, 0.92));
-      backpack.position.set(0, 0.48, -0.23);
+      backpack.position.set(0, 0.42, -0.23);
       rig.add(backpack);
     } else {
       const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.23, 0.14, 6), mat(palette.accent, 0.82));
       const top = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), mat(palette.accent, 0.82));
       top.position.y = 0.13;
       hat.add(cap, top);
-      hat.position.y = 2.02;
+      hat.position.y = 1.97;
       const bag = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.2, 0.1), mat(palette.accent, 0.94));
-      bag.position.set(-0.03, 0.48, -0.22);
+      bag.position.set(-0.03, 0.42, -0.22);
       rig.add(bag);
     }
     rig.add(hat);
@@ -191,7 +192,7 @@
       ? new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.48, 0.07), mat(0xf2efe6, 0.95))
       : null;
     if (apron) {
-      apron.position.set(0, 0.42, 0.18);
+      apron.position.set(0, 0.36, 0.18);
       rig.add(apron);
     }
 
@@ -242,13 +243,12 @@
     const bob = Math.sin(now * 0.006 + soft.blinkSeed * 0.0002) * (0.01 + speed * 0.018);
     const blink = 0.5 + 0.5 * Math.max(0, Math.sin(now * 0.0038 + soft.blinkSeed * 0.0003));
 
-    soft.body.position.y = 0.98 + bob * 0.3;
-    soft.hips.position.y = 0.42 + bob * 0.15;
-    soft.head.position.y = 1.82 + bob * 0.9;
-    soft.hat.position.y += 0;
-    soft.body.rotation.x = bob * 0.35;
+    soft.body.position.y = 0.92 + bob * 0.3;
+    soft.hips.position.y = 0.34 + bob * 0.15;
+    soft.head.position.y = 1.78 + bob * 0.9;
+    soft.body.rotation.x = bob * 0.28;
     soft.body.rotation.z = swing * 0.03;
-    soft.head.rotation.x = -bob * 0.2;
+    soft.head.rotation.x = -bob * 0.18;
     soft.head.rotation.y = Math.sin(now * 0.0016 + soft.blinkSeed * 0.0001) * 0.05;
 
     soft.leftArm.rotation.x = 0.08 + swing;
