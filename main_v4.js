@@ -234,7 +234,7 @@
     const head = new THREE.Group();
     const skull = new THREE.Mesh(new THREE.IcosahedronGeometry(0.32, 0), skin.clone());
     skull.rotation.y = 0.25;
-    const face = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.18, 0.12), skin.clone());
+    const face = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.16, 0.12), skin.clone());
     face.position.set(0, -0.03, 0.24);
     const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.12, 0.14), skin.clone());
     jaw.position.set(0, -0.17, 0.1);
@@ -545,6 +545,7 @@
     };
 
     const root = table.group;
+    root.position.set(spot.gx + 0.5, 0, spot.gz + 0.5);
     root.add(createTableVisual());
 
     const chairA = createChair();
