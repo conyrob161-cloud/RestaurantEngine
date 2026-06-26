@@ -82,17 +82,16 @@
     shadow.position.y = 0.01;
     rig.add(shadow);
 
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.27, 0.72, 4, 6), mat(type === 'chef' ? 0xf8f6f0 : palette.shirt, 0.92));
-    body.position.y = 0.82;
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.26, 0.62, 4, 6), mat(type === 'chef' ? 0xf8f6f0 : palette.shirt, 0.92));
+    body.position.y = 0.98;
     rig.add(body);
 
-    const hips = new THREE.Mesh(new THREE.CapsuleGeometry(0.23, 0.18, 4, 6), mat(type === 'chef' ? 0x70533d : palette.pants, 0.98));
-    hips.position.y = 0.29;
+    const hips = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.18, 4, 6), mat(type === 'chef' ? 0x70533d : palette.pants, 0.98));
+    hips.position.y = 0.42;
     rig.add(hips);
 
     const head = new THREE.Group();
     const skull = new THREE.Mesh(new THREE.SphereGeometry(0.31, 8, 6), mat(palette.skin, 0.95));
-    skull.position.y = 0;
     const face = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.16, 0.12), mat(palette.skin, 0.96));
     face.position.set(0, -0.03, 0.24);
     const nose = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.08), mat(palette.skin, 0.95));
@@ -102,7 +101,7 @@
     eyeL.position.set(-0.09, 0.04, 0.27);
     eyeR.position.set(0.09, 0.04, 0.27);
     head.add(skull, face, nose, eyeL, eyeR);
-    head.position.y = 1.48;
+    head.position.y = 1.82;
     rig.add(head);
 
     const armL = new THREE.Group();
@@ -120,12 +119,14 @@
       lower.position.y = -0.48;
       hand.position.y = -0.72;
       arm.add(upper, lower, hand);
-      arm.position.set(side * 0.42, 1.02, 0);
+      arm.position.set(side * 0.42, 1.08, 0);
       arm.rotation.z = side * -0.12;
       return arm;
     }
-    armL.add(addArm(-1));
-    armR.add(addArm(1));
+    const leftArm = addArm(-1);
+    const rightArm = addArm(1);
+    armL.add(leftArm);
+    armR.add(rightArm);
     rig.add(armL, armR);
 
     const legL = new THREE.Group();
@@ -142,12 +143,14 @@
       calf.position.y = -0.45;
       shoe.position.y = -0.68;
       leg.add(thigh, calf, shoe);
-      leg.position.set(side * 0.15, 0.34, 0.01);
+      leg.position.set(side * 0.15, 0.25, 0.01);
       leg.rotation.z = side * 0.04;
       return leg;
     }
-    legL.add(addLeg(-1));
-    legR.add(addLeg(1));
+    const leftLeg = addLeg(-1);
+    const rightLeg = addLeg(1);
+    legL.add(leftLeg);
+    legR.add(rightLeg);
     rig.add(legL, legR);
 
     const hat = new THREE.Group();
@@ -161,25 +164,25 @@
       puff3.position.set(0.09, 0.2, 0);
       band.position.y = -0.02;
       hat.add(band, puff1, puff2, puff3);
-      hat.position.y = 1.92;
+      hat.position.y = 2.22;
     } else if (type === 'player') {
       const cap = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.12, 0.26), mat(0x24324c, 0.86));
       const brim = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.05, 0.16), mat(palette.accent, 0.84));
       brim.position.set(0, -0.02, 0.14);
       cap.position.y = 0.06;
       hat.add(cap, brim);
-      hat.position.y = 1.83;
+      hat.position.y = 2.06;
       const backpack = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.34, 0.14), mat(0x2b4672, 0.92));
-      backpack.position.set(0, 0.44, -0.23);
+      backpack.position.set(0, 0.48, -0.23);
       rig.add(backpack);
     } else {
       const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.23, 0.14, 6), mat(palette.accent, 0.82));
       const top = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), mat(palette.accent, 0.82));
       top.position.y = 0.13;
       hat.add(cap, top);
-      hat.position.y = 1.78;
+      hat.position.y = 2.02;
       const bag = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.2, 0.1), mat(palette.accent, 0.94));
-      bag.position.set(-0.03, 0.44, -0.22);
+      bag.position.set(-0.03, 0.48, -0.22);
       rig.add(bag);
     }
     rig.add(hat);
@@ -188,7 +191,7 @@
       ? new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.48, 0.07), mat(0xf2efe6, 0.95))
       : null;
     if (apron) {
-      apron.position.set(0, 0.33, 0.18);
+      apron.position.set(0, 0.42, 0.18);
       rig.add(apron);
     }
 
@@ -204,6 +207,10 @@
       hat,
       eyeL,
       eyeR,
+      leftArm,
+      rightArm,
+      leftLeg,
+      rightLeg,
       blinkSeed: hashString(seedText + type),
       type,
     };
@@ -217,7 +224,7 @@
     const soft = buildSoftRig(type, palette, root.userData.seed || root.uuid);
     root.add(soft.rig);
     root.userData.softRig = soft;
-    root.userData.rig = { armL: soft.armL, armR: soft.armR };
+    root.userData.rig = { armL: soft.leftArm, armR: soft.rightArm };
     upgradedRoots.add(root);
   }
 
@@ -235,34 +242,33 @@
     const bob = Math.sin(now * 0.006 + soft.blinkSeed * 0.0002) * (0.01 + speed * 0.018);
     const blink = 0.5 + 0.5 * Math.max(0, Math.sin(now * 0.0038 + soft.blinkSeed * 0.0003));
 
-    soft.body.position.y = 0.82 + bob * 0.4;
-    soft.hips.position.y = 0.29 + bob * 0.2;
-    soft.head.position.y = 1.48 + bob * 1.2;
-    soft.hat.position.y += 0; // stable, avoids drifting
-    soft.body.rotation.x = bob * 0.45;
+    soft.body.position.y = 0.98 + bob * 0.3;
+    soft.hips.position.y = 0.42 + bob * 0.15;
+    soft.head.position.y = 1.82 + bob * 0.9;
+    soft.hat.position.y += 0;
+    soft.body.rotation.x = bob * 0.35;
     soft.body.rotation.z = swing * 0.03;
-    soft.head.rotation.x = -bob * 0.25;
+    soft.head.rotation.x = -bob * 0.2;
     soft.head.rotation.y = Math.sin(now * 0.0016 + soft.blinkSeed * 0.0001) * 0.05;
 
-    // Keep chef animation hooks compatible with main_v4.js.
-    if (root.userData.rig) {
-      root.userData.rig.armL = soft.armL;
-      root.userData.rig.armR = soft.armR;
-    }
+    soft.leftArm.rotation.x = 0.08 + swing;
+    soft.rightArm.rotation.x = 0.08 - swing;
+    soft.leftArm.rotation.z = 0.12;
+    soft.rightArm.rotation.z = -0.12;
 
-    soft.armL.rotation.x = 0.08 + swing;
-    soft.armR.rotation.x = 0.08 - swing;
-    soft.armL.rotation.z = 0.12;
-    soft.armR.rotation.z = -0.12;
-
-    soft.legL.rotation.x = -0.05 - swing * 0.95;
-    soft.legR.rotation.x = -0.05 + swing * 0.95;
-    soft.legL.rotation.z = 0.03;
-    soft.legR.rotation.z = -0.03;
+    soft.leftLeg.rotation.x = -0.05 - swing * 0.95;
+    soft.rightLeg.rotation.x = -0.05 + swing * 0.95;
+    soft.leftLeg.rotation.z = 0.03;
+    soft.rightLeg.rotation.z = -0.03;
 
     if (soft.eyeL && soft.eyeR) {
       soft.eyeL.scale.y = blink;
       soft.eyeR.scale.y = blink;
+    }
+
+    if (root.userData.rig) {
+      root.userData.rig.armL = soft.leftArm;
+      root.userData.rig.armR = soft.rightArm;
     }
   }
 
