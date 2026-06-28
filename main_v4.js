@@ -19,12 +19,14 @@
     nub: document.getElementById('nub'),
   };
 
-  const SAVE_KEY = 'restaurant-zombie-v5';
+  const SAVE_KEY = 'restaurant-zombie-v7';
   const GRID_W = 20;
   const GRID_H = 20;
   const TABLE_SLOTS = [
-    { gx: 6, gz: 9 }, { gx: 13, gz: 9 }, { gx: 6, gz: 14 }, { gx: 13, gz: 14 },
-    { gx: 3, gz: 12 }, { gx: 16, gz: 12 }, { gx: 3, gz: 15 }, { gx: 16, gz: 15 },
+    { gx: 5, gz: 9 }, { gx: 14, gz: 9 },
+    { gx: 5, gz: 14 }, { gx: 14, gz: 14 },
+    { gx: 3, gz: 11 }, { gx: 16, gz: 11 },
+    { gx: 3, gz: 16 }, { gx: 16, gz: 16 },
   ];
   const WORLD = {
     stock: { gx: 3, gz: 3 },
@@ -54,49 +56,24 @@
 
   const blocked = Array.from({ length: GRID_H }, () => Array(GRID_W).fill(false));
   const tables = [];
-
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const dist = (ax, az, bx, bz) => Math.hypot(ax - bx, az - bz);
   const cellCenter = (gx, gz) => ({ x: gx + 0.5, z: gz + 0.5 });
   const worldToCell = (x, z) => ({ gx: Math.floor(x), gz: Math.floor(z) });
-  const cellBlocked = (gx, gz) => gx < 0 || gz < 0 || gx >= GRID_W || gz >= GRID_H || blocked[gz][gx];
 
-  function block(gx, gz) {
-    if (gx >= 0 && gz >= 0 && gx < GRID_W && gz < GRID_H) blocked[gz][gx] = true;
-  }
-
-  function rebuildBlockedMap() {
-    for (let gx = 0; gx < GRID_W; gx++) {
-      block(gx, 0);
-      block(gx, GRID_H - 1);
-    }
-    for (let gz = 0; gz < GRID_H; gz++) {
-      block(0, gz);
-      block(GRID_W - 1, gz);
-    }
-    for (let gx = 1; gx < GRID_W - 1; gx++) {
-      if (gx !== WORLD.entrance.gx) block(gx, 7);
-    }
-    for (let gz = 1; gz < 7; gz++) {
-      block(4, gz);
-      block(15, gz);
-    }
-    block(WORLD.stock.gx, WORLD.stock.gz);
-    block(WORLD.oven.gx, WORLD.oven.gz);
-    block(WORLD.counter.gx, WORLD.counter.gz);
-    block(WORLD.cash.gx, WORLD.cash.gz);
-    for (const t of tables) if (t.active) block(t.gx, t.gz);
-  }
-
-  function canOccupy(x, z, radius = 0.22) {
-    const points = [
-      [0, 0], [radius, 0], [-radius, 0], [0, radius], [0, -radius],
-      [radius, radius], [radius, -radius], [-radius, radius], [-radius, -radius],
-    ];
-    return points.every(([dx, dz]) => {
-      const c = worldToCell(x + dx, z + dz);
-      return !cellBlocked(c.gx, c.gz);
-    });
+  function roundedRectPath(ctx, x, y, w, h, r) {
+    const rr = Math.max(0, Math.min(r, Math.min(w, h) / 2));
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.lineTo(x + w - rr, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
+    ctx.lineTo(x + w, y + h - rr);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+    ctx.lineTo(x + rr, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
+    ctx.lineTo(x, y + rr);
+    ctx.quadraticCurveTo(x, y, x + rr, y);
+    ctx.closePath();
   }
 
   function makeCanvasTexture(drawFn, size = 256) {
@@ -107,7 +84,6 @@
     drawFn(ctx, size, size);
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
     tex.needsUpdate = true;
     return tex;
   }
@@ -122,24 +98,10 @@
     tex.minFilter = THREE.LinearFilter;
     tex.magFilter = THREE.LinearFilter;
 
-    function roundRect(x, y, w, h, r) {
-      ctx.beginPath();
-      ctx.moveTo(x + r, y);
-      ctx.lineTo(x + w - r, y);
-      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-      ctx.lineTo(x + w, y + h - r);
-      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-      ctx.lineTo(x + r, y + h);
-      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-      ctx.lineTo(x, y + r);
-      ctx.quadraticCurveTo(x, y, x + r, y);
-      ctx.closePath();
-    }
-
     function draw(value) {
       ctx.clearRect(0, 0, c.width, c.height);
       ctx.fillStyle = bg;
-      roundRect(24, 44, 464, 168, 32);
+      roundedRectPath(ctx, 24, 44, 464, 168, 32);
       ctx.fill();
       ctx.strokeStyle = 'rgba(255,255,255,0.18)';
       ctx.lineWidth = 6;
@@ -162,7 +124,7 @@
     const group = new THREE.Group();
     const items = [];
     for (let i = 0; i < max; i++) {
-      const base = new THREE.Mesh(
+      const pie = new THREE.Mesh(
         new THREE.CylinderGeometry(0.22, 0.24, 0.06, 6),
         new THREE.MeshStandardMaterial({ color: 0xc47a3a, roughness: 0.96 })
       );
@@ -171,12 +133,12 @@
         new THREE.MeshStandardMaterial({ color: 0xf0ca78, roughness: 0.92 })
       );
       cheese.position.y = 0.04;
-      base.add(cheese);
-      base.visible = false;
-      base.position.y = i * 0.055;
-      base.rotation.y = i * 0.43 + spin;
-      items.push(base);
-      group.add(base);
+      pie.add(cheese);
+      pie.visible = false;
+      pie.position.y = i * 0.055;
+      pie.rotation.y = i * 0.43 + spin;
+      group.add(pie);
+      items.push(pie);
     }
     function setCount(count) {
       const n = clamp(count, 0, max);
@@ -206,381 +168,215 @@
     return shadow;
   }
 
-  function buildCharacter(type, palette, seed) {
-    const root = new THREE.Group();
-    root.userData.characterType = type;
-    root.userData.seed = seed;
-
-    const shirt = new THREE.MeshStandardMaterial({ color: palette.shirt, roughness: 0.94 });
-    const pants = new THREE.MeshStandardMaterial({ color: palette.pants, roughness: 0.98 });
-    const skin = new THREE.MeshStandardMaterial({ color: palette.skin, roughness: 0.95 });
-    const accent = new THREE.MeshStandardMaterial({ color: palette.accent, roughness: 0.9 });
-    const dark = new THREE.MeshStandardMaterial({ color: 0x1d2230, roughness: 1.0 });
-
-    const shadow = createShadow();
-    root.add(shadow);
-
-    const body = new THREE.Group();
-    const chest = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.72, 0.36), shirt.clone());
-    chest.position.y = 0.44;
-    const shoulders = new THREE.Mesh(new THREE.BoxGeometry(0.84, 0.16, 0.38), shirt.clone());
-    shoulders.position.y = 0.72;
-    const hips = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.22, 0.28), pants.clone());
-    hips.position.y = 0.12;
-    const belt = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.05, 0.18), dark.clone());
-    belt.position.y = 0.22;
-    body.add(chest, shoulders, hips, belt);
-
-    const head = new THREE.Group();
-    const skull = new THREE.Mesh(new THREE.IcosahedronGeometry(0.32, 0), skin.clone());
-    skull.rotation.y = 0.25;
-    const face = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.16, 0.12), skin.clone());
-    face.position.set(0, -0.03, 0.24);
-    const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.12, 0.14), skin.clone());
-    jaw.position.set(0, -0.17, 0.1);
-    const nose = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.06, 0.08), skin.clone());
-    nose.position.set(0, 0.0, 0.3);
-    const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), dark.clone());
-    const eyeR = eyeL.clone();
-    eyeL.position.set(-0.09, 0.04, 0.27);
-    eyeR.position.set(0.09, 0.04, 0.27);
-    head.add(skull, face, jaw, nose, eyeL, eyeR);
-
-    const armL = new THREE.Group();
-    const armR = new THREE.Group();
-    const upperArmL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.34, 0.12), shirt.clone());
-    const upperArmR = upperArmL.clone();
-    const lowerArmL = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.3, 0.11), skin.clone());
-    const lowerArmR = lowerArmL.clone();
-    const handL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.14), type === 'customer' ? accent.clone() : dark.clone());
-    const handR = handL.clone();
-    upperArmL.position.y = -0.18; lowerArmL.position.y = -0.50; handL.position.y = -0.78;
-    upperArmR.position.y = -0.18; lowerArmR.position.y = -0.50; handR.position.y = -0.78;
-    armL.add(upperArmL, lowerArmL, handL);
-    armR.add(upperArmR, lowerArmR, handR);
-    armL.position.set(-0.42, 0.72, 0);
-    armR.position.set(0.42, 0.72, 0);
-
-    const legL = new THREE.Group();
-    const legR = new THREE.Group();
-    const thighL = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.40, 0.16), pants.clone());
-    const thighR = thighL.clone();
-    const calfL = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.34, 0.13), pants.clone());
-    const calfR = calfL.clone();
-    const bootL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.08, 0.28), dark.clone());
-    const bootR = bootL.clone();
-    thighL.position.y = -0.22; calfL.position.y = -0.57; bootL.position.y = -0.82;
-    thighR.position.y = -0.22; calfR.position.y = -0.57; bootR.position.y = -0.82;
-    legL.add(thighL, calfL, bootL);
-    legR.add(thighR, calfR, bootR);
-    legL.position.set(-0.17, 0.23, 0.01);
-    legR.position.set(0.17, 0.23, 0.01);
-
-    const hat = new THREE.Group();
-    if (type === 'chef') {
-      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.12, 6), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.78 }));
-      const puff1 = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.78 }));
-      const puff2 = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.78 }));
-      const puff3 = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.78 }));
-      puff1.position.set(-0.08, 0.2, 0); puff2.position.set(0, 0.34, 0.02); puff3.position.set(0.09, 0.2, 0);
-      band.position.y = -0.02;
-      hat.add(band, puff1, puff2, puff3);
-    } else if (type === 'player') {
-      const cap = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.12, 0.26), new THREE.MeshStandardMaterial({ color: 0x24324c, roughness: 0.86 }));
-      const brim = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.05, 0.16), accent.clone());
-      brim.position.set(0, -0.02, 0.14);
-      cap.position.y = 0.06;
-      hat.add(cap, brim);
-      const backpack = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.34, 0.14), new THREE.MeshStandardMaterial({ color: 0x2b4672, roughness: 0.92 }));
-      backpack.position.set(0, 0.38, -0.26);
-      body.add(backpack);
-    } else {
-      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.23, 0.14, 6), accent.clone());
-      const top = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), accent.clone());
-      top.position.y = 0.13;
-      hat.add(cap, top);
+  function hashString(text) {
+    let h = 2166136261;
+    for (let i = 0; i < text.length; i++) {
+      h ^= text.charCodeAt(i);
+      h = Math.imul(h, 16777619);
     }
-    hat.position.y = 1.52;
-
-    if (type === 'chef') {
-      const apron = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.48, 0.07), new THREE.MeshStandardMaterial({ color: 0xf2efe6, roughness: 0.95 }));
-      apron.position.set(0, 0.18, 0.2);
-      const pocket = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.09, 0.02), new THREE.MeshStandardMaterial({ color: 0xd9d1c2, roughness: 0.95 }));
-      pocket.position.set(0, 0.1, 0.24);
-      body.add(apron, pocket);
-    }
-
-    if (type === 'customer') {
-      const bag = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.2, 0.1), new THREE.MeshStandardMaterial({ color: palette.accent, roughness: 0.95 }));
-      bag.position.set(-0.02, 0.36, -0.24);
-      body.add(bag);
-    }
-
-    root.add(body, head, armL, armR, legL, legR, hat);
-
-    root.userData.rig = {
-      type,
-      body,
-      head,
-      armL,
-      armR,
-      legL,
-      legR,
-      hat,
-      eyeL,
-      eyeR,
-      baseHeadY: head.position.y,
-      baseBodyY: body.position.y,
-      baseHatY: hat.position.y,
-      blinkSeed: Math.random() * Math.PI * 2,
-    };
-
-    root.position.set(0, 0, 0);
-    return root;
+    return h >>> 0;
   }
 
   function paletteFor(type, seedText = '') {
-    if (type === 'player') return { shirt: 0x4d78b5, pants: 0x24324c, skin: 0xf0ceb1, accent: 0x8ecae6 };
-    if (type === 'chef') return { shirt: 0xf8f6f0, pants: 0x70533d, skin: 0xf0ceb1, accent: 0xc6b08f };
+    if (type === 'player') return { body: 0x4d78b5, pants: 0x24324c, skin: 0xf0ceb1, accent: 0x8ecae6, hair: 0x253047 };
+    if (type === 'chef') return { body: 0xf8f6f0, pants: 0x70533d, skin: 0xf0ceb1, accent: 0xc6b08f, hair: 0x1f1f1f };
     const sets = [
-      { shirt: 0x5f7dd6, pants: 0x2f3644, skin: 0xf1ccb0, accent: 0xffc857 },
-      { shirt: 0xd96c6c, pants: 0x3d2f3d, skin: 0xefc8a4, accent: 0x8fe08f },
-      { shirt: 0x4c9b72, pants: 0x2c3943, skin: 0xe9c5aa, accent: 0xf2d56b },
-      { shirt: 0x9e78d2, pants: 0x40324f, skin: 0xeec7aa, accent: 0x7ee0ff },
-      { shirt: 0x729f5d, pants: 0x3d4331, skin: 0xe5c0a3, accent: 0xc8d18a },
+      { body: 0x5f7dd6, pants: 0x2f3644, skin: 0xf1ccb0, accent: 0xffc857, hair: 0x3f2e24 },
+      { body: 0xd96c6c, pants: 0x3d2f3d, skin: 0xefc8a4, accent: 0x8fe08f, hair: 0x2c2a28 },
+      { body: 0x4c9b72, pants: 0x2c3943, skin: 0xe9c5aa, accent: 0xf2d56b, hair: 0x5e452f },
+      { body: 0x9e78d2, pants: 0x40324f, skin: 0xeec7aa, accent: 0x7ee0ff, hair: 0x1c1f27 },
+      { body: 0x729f5d, pants: 0x3d4331, skin: 0xe5c0a3, accent: 0xc8d18a, hair: 0x50372b },
     ];
     let h = 0;
     for (const ch of seedText) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
     return sets[h % sets.length];
   }
 
-  function hidePlaceholderMeshes(root) {
-    root.traverse((obj) => {
-      if (!obj.isMesh) return;
-      if (obj.geometry?.type === 'CircleGeometry') return;
-      obj.visible = false;
-    });
-  }
-
-  function upgradeExistingCharacter(root) {
-    if (root.userData.upgradedCharacter) return;
-    const body = root.children.flatMap ? null : null;
-    const bodyMesh = findFirstMesh(root, (m) => m.geometry?.type === 'CylinderGeometry' && m.geometry?.parameters && Math.abs(m.geometry.parameters.height - 0.92) < 0.22);
-    const headMesh = findFirstMesh(root, (m) => m.geometry?.type === 'SphereGeometry' && m.geometry?.parameters && Math.abs(m.geometry.parameters.radius - 0.28) < 0.12);
-    if (!bodyMesh || !headMesh) return;
-
-    const hex = bodyMesh.material?.color?.getHex?.() ?? 0;
-    const type = hex === 0x355d9d ? 'player' : hex === 0x8f5f43 ? 'chef' : 'customer';
-    const palette = paletteFor(type, root.uuid + root.position.x.toFixed(2) + root.position.z.toFixed(2));
-    hidePlaceholderMeshes(root);
-    const rig = buildCharacter(type, palette, root.uuid);
-    root.add(rig);
-    root.userData.upgradedCharacter = true;
-    root.userData.rig = rig.userData.rig;
-    root.userData.characterType = type;
-  }
-
-  function findFirstMesh(root, predicate) {
-    let found = null;
-    root.traverse((obj) => {
-      if (found || !obj.isMesh || !obj.geometry) return;
-      if (predicate(obj)) found = obj;
-    });
-    return found;
-  }
-
-  function characterFactory(type, seedText) {
-    const palette = paletteFor(type, seedText);
-    return buildCharacter(type, palette, seedText);
-  }
-
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
-  renderer.setSize(window.innerWidth, window.innerHeight, false);
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x16202d);
-  scene.fog = new THREE.Fog(0x16202d, 18, 34);
-
-  const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 100);
-  camera.position.set(14.5, 18.5, 15.5);
-  camera.lookAt(10, 0.8, 10);
-
-  const hemi = new THREE.HemisphereLight(0xffffff, 0x314053, 1.35);
-  scene.add(hemi);
-  const dir = new THREE.DirectionalLight(0xffffff, 1.8);
-  dir.position.set(10, 18, 6);
-  scene.add(dir);
-  const fill = new THREE.DirectionalLight(0xffd8ad, 0.55);
-  fill.position.set(-8, 6, -8);
-  scene.add(fill);
-
-  const floorTex = makeCanvasTexture((ctx, w, h) => {
-    ctx.fillStyle = '#d6ba83';
-    ctx.fillRect(0, 0, w, h);
-    const tile = w / 8;
-    for (let y = 0; y < 8; y++) {
-      for (let x = 0; x < 8; x++) {
-        ctx.fillStyle = (x + y) % 2 === 0 ? '#e5cd9c' : '#d8b779';
-        ctx.fillRect(x * tile, y * tile, tile, tile);
-        ctx.fillStyle = 'rgba(0,0,0,0.03)';
-        ctx.fillRect(x * tile, y * tile, tile, tile);
-      }
+  function makeFaceTexture(seed, skin, hair) {
+    const c = document.createElement('canvas');
+    c.width = 256;
+    c.height = 256;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = `#${skin.toString(16).padStart(6, '0')}`;
+    ctx.fillRect(0, 0, 256, 256);
+    ctx.fillStyle = `#${hair.toString(16).padStart(6, '0')}`;
+    const variant = seed % 4;
+    ctx.beginPath();
+    ctx.ellipse(128, 92, 95, 92, 0, Math.PI, 0);
+    ctx.fill();
+    if (variant === 1) {
+      ctx.fillRect(28, 52, 36, 112);
+      ctx.fillRect(192, 52, 36, 112);
+    } else if (variant === 2) {
+      ctx.beginPath();
+      ctx.ellipse(128, 74, 70, 34, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (variant === 3) {
+      ctx.beginPath();
+      ctx.ellipse(128, 74, 86, 46, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillRect(46, 60, 24, 54);
+      ctx.fillRect(186, 60, 24, 54);
     }
-    ctx.strokeStyle = 'rgba(90,60,35,0.18)';
-    ctx.lineWidth = 4;
-    ctx.strokeRect(2, 2, w - 4, h - 4);
-  });
-  floorTex.repeat.set(2, 2);
-
-  const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(20, 20),
-    new THREE.MeshStandardMaterial({ map: floorTex, roughness: 1 })
-  );
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.set(10, 0, 10);
-  scene.add(floor);
-
-  const grid = new THREE.GridHelper(20, 20, 0x8c6a43, 0xc7b088);
-  grid.position.y = 0.03;
-  scene.add(grid);
-
-  // walls and kitchen partitions
-  for (let gx = 0; gx < GRID_W; gx++) {
-    if (gx !== WORLD.entrance.gx) scene.add(makeWall(gx + 0.5, 0.5, 2.6));
-    scene.add(makeWall(gx + 0.5, 19.5, 2.6));
-  }
-  for (let gz = 0; gz < GRID_H; gz++) {
-    scene.add(makeWall(0.5, gz + 0.5, 2.6));
-    scene.add(makeWall(19.5, gz + 0.5, 2.6));
-  }
-  for (let gx = 1; gx < GRID_W - 1; gx++) if (gx !== WORLD.entrance.gx) scene.add(makeWall(gx + 0.5, 7.5, 2.2));
-  for (let gz = 1; gz < 7; gz++) {
-    scene.add(makeWall(4.5, gz + 0.5, 2.2));
-    scene.add(makeWall(15.5, gz + 0.5, 2.2));
+    ctx.fillStyle = '#141414';
+    ctx.beginPath(); ctx.arc(88, 126, 11, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(168, 126, 11, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(240,120,120,0.18)';
+    ctx.beginPath(); ctx.arc(72, 150, 16, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(184, 150, 16, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(175,120,100,0.95)';
+    ctx.beginPath(); ctx.roundRect(121, 136, 14, 26, 7); ctx.fill();
+    ctx.strokeStyle = '#6b2b2b';
+    ctx.lineWidth = 8;
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(128, 172, 18, 0.1 * Math.PI, 0.9 * Math.PI); ctx.stroke();
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.needsUpdate = true;
+    return tex;
   }
 
-  function makeWall(x, z, h) {
-    const wall = new THREE.Mesh(
-      new THREE.BoxGeometry(1, h, 1),
-      new THREE.MeshStandardMaterial({ color: 0x89593f, roughness: 0.98 })
+  function makePearCharacter(type, seedText) {
+    const palette = paletteFor(type, seedText);
+    const root = new THREE.Group();
+    root.userData.characterType = type;
+    root.userData.seed = seedText;
+
+    const shadow = createShadow();
+    root.add(shadow);
+
+    const bodyRig = new THREE.Group();
+    bodyRig.position.y = 0.15;
+    root.add(bodyRig);
+
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.36, 10, 8), new THREE.MeshStandardMaterial({ color: palette.body, roughness: 0.92 }));
+    body.scale.set(0.82, 1.08, 0.72);
+    body.position.y = 0.78;
+    bodyRig.add(body);
+
+    const head = new THREE.Group();
+    const skinMat = new THREE.MeshStandardMaterial({ color: palette.skin, roughness: 0.95 });
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 8), skinMat.clone());
+    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.34, 10, 8), new THREE.MeshStandardMaterial({ color: palette.hair, roughness: 0.95 }));
+    hair.scale.set(1.0, 0.72, 0.92);
+    hair.position.set(0, 0.05, -0.02);
+    const facePlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.54, 0.54),
+      new THREE.MeshStandardMaterial({ map: makeFaceTexture(hashString(seedText), palette.skin, palette.hair), roughness: 0.95 })
     );
-    wall.position.set(x, h / 2, z);
-    return wall;
-  }
+    facePlane.position.set(0, -0.02, 0.31);
+    head.add(skull, hair, facePlane);
+    head.position.y = 1.78;
+    bodyRig.add(head);
 
-  const sign = new THREE.Mesh(
-    new THREE.BoxGeometry(4.8, 0.45, 0.2),
-    new THREE.MeshStandardMaterial({ color: 0x22314a, roughness: 0.6 })
-  );
-  sign.position.set(10, 2.1, 8.2);
-  scene.add(sign);
-  const signLabel = makeLabelSprite('RESTAURANT ZOMBIE', '#111827', '#fff', 2.1, 0.8);
-  signLabel.sprite.position.set(10, 2.9, 8.3);
-  scene.add(signLabel.sprite);
+    function makeHand(side) {
+      const g = new THREE.Group();
+      const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.14, 6), new THREE.MeshStandardMaterial({ color: palette.body, roughness: 0.94 }));
+      cuff.rotation.z = Math.PI / 2;
+      cuff.position.x = side * -0.05;
+      const palm = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), skinMat.clone());
+      const finger1 = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 6), skinMat.clone());
+      const finger2 = finger1.clone();
+      const finger3 = finger1.clone();
+      palm.position.x = 0.1;
+      finger1.position.set(0.16, 0.035, 0.03);
+      finger2.position.set(0.16, 0.0, 0.0);
+      finger3.position.set(0.16, -0.035, -0.03);
+      g.add(cuff, palm, finger1, finger2, finger3);
+      g.position.set(side * 0.58, 1.04, 0);
+      g.rotation.z = side * 0.1;
+      return g;
+    }
 
-  const stockCrate = new THREE.Group();
-  const crateMat = new THREE.MeshStandardMaterial({ color: 0x5e452f, roughness: 1 });
-  for (let i = 0; i < 3; i++) {
-    const box = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.5, 0.8), crateMat);
-    box.position.set((i % 2) * 0.1, 0.25 + i * 0.18, (i % 2) * 0.04);
-    stockCrate.add(box);
-  }
-  stockCrate.position.set(WORLD.stock.gx + 0.5, 0, WORLD.stock.gz + 0.5);
-  scene.add(stockCrate);
+    function makeFoot(side) {
+      const g = new THREE.Group();
+      const shoeMat = new THREE.MeshStandardMaterial({ color: type === 'chef' ? 0x1f1f1f : 0x1d2230, roughness: 1 });
+      const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.1, 0.34), shoeMat);
+      const toe = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), shoeMat);
+      shoe.position.y = 0.02;
+      toe.position.set(0.09, 0.02, 0.13);
+      g.add(shoe, toe);
+      g.position.set(side * 0.17, 0.08, 0.02);
+      return g;
+    }
 
-  const ovenBody = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.9, 1.0), new THREE.MeshStandardMaterial({ color: 0xa25136, roughness: 0.95 }));
-  ovenBody.position.set(WORLD.oven.gx + 0.5, 0.45, WORLD.oven.gz + 0.5);
-  scene.add(ovenBody);
-  const ovenTop = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.16, 0.92), new THREE.MeshStandardMaterial({ color: 0xf1d19b, roughness: 0.95 }));
-  ovenTop.position.set(WORLD.oven.gx + 0.5, 0.98, WORLD.oven.gz + 0.5);
-  scene.add(ovenTop);
-  const ovenTray = new THREE.Group();
-  ovenTray.position.set(WORLD.oven.gx + 0.5, 1.08, WORLD.oven.gz + 0.5);
-  scene.add(ovenTray);
+    const handL = makeHand(-1);
+    const handR = makeHand(1);
+    const footL = makeFoot(-1);
+    const footR = makeFoot(1);
+    bodyRig.add(handL, handR, footL, footR);
 
-  const counter = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.95, 0.8), new THREE.MeshStandardMaterial({ color: 0x4f7f68, roughness: 0.95 }));
-  counter.position.set(WORLD.counter.gx + 0.5, 0.48, WORLD.counter.gz + 0.5);
-  scene.add(counter);
-  const counterTop = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.12, 0.86), new THREE.MeshStandardMaterial({ color: 0xdde8dd, roughness: 0.95 }));
-  counterTop.position.set(WORLD.counter.gx + 0.5, 0.98, WORLD.counter.gz + 0.5);
-  scene.add(counterTop);
+    const hat = new THREE.Group();
+    if (type === 'chef') {
+      const white = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.78 });
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.12, 6), white.clone());
+      const p1 = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), white.clone());
+      const p2 = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), white.clone());
+      const p3 = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), white.clone());
+      p1.position.set(-0.08, 0.2, 0); p2.position.set(0, 0.34, 0.02); p3.position.set(0.09, 0.2, 0);
+      band.position.y = -0.02;
+      hat.add(band, p1, p2, p3);
+      hat.position.y = 2.18;
+    } else if (type === 'player') {
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.12, 0.28), new THREE.MeshStandardMaterial({ color: 0x24324c, roughness: 0.86 }));
+      const brim = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.05, 0.18), new THREE.MeshStandardMaterial({ color: palette.accent, roughness: 0.84 }));
+      brim.position.set(0, -0.02, 0.16);
+      cap.position.y = 0.06;
+      hat.add(cap, brim);
+      hat.position.y = 2.02;
+      const backpack = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.34, 0.14), new THREE.MeshStandardMaterial({ color: 0x2b4672, roughness: 0.92 }));
+      backpack.position.set(0, 0.42, -0.23);
+      bodyRig.add(backpack);
+    } else {
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.23, 0.14, 6), new THREE.MeshStandardMaterial({ color: palette.accent, roughness: 0.82 }));
+      const top = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), new THREE.MeshStandardMaterial({ color: palette.accent, roughness: 0.82 }));
+      top.position.y = 0.13;
+      hat.add(cap, top);
+      hat.position.y = 1.98;
+      const badge = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.14, 0.03), new THREE.MeshStandardMaterial({ color: palette.accent, roughness: 0.95 }));
+      badge.position.set(0.06, 0.48, 0.28);
+      bodyRig.add(badge);
+    }
+    bodyRig.add(hat);
 
-  const cashDesk = new THREE.Mesh(new THREE.BoxGeometry(1.35, 1.0, 0.85), new THREE.MeshStandardMaterial({ color: 0x647cff, roughness: 0.95 }));
-  cashDesk.position.set(WORLD.cash.gx + 0.5, 0.5, WORLD.cash.gz + 0.5);
-  scene.add(cashDesk);
+    if (type === 'chef') {
+      const apron = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.48, 0.07), new THREE.MeshStandardMaterial({ color: 0xf2efe6, roughness: 0.95 }));
+      apron.position.set(0, 0.28, 0.2);
+      const pocket = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.09, 0.02), new THREE.MeshStandardMaterial({ color: 0xd9d1c2, roughness: 0.95 }));
+      pocket.position.set(0, 0.2, 0.24);
+      bodyRig.add(apron, pocket);
+    }
 
-  const player = characterFactory('player', 'player-main');
-  player.position.set(state.player.x, 0, state.player.z);
-  scene.add(player);
-
-  const carryStack = makeStack(12, 0.25);
-  carryStack.group.position.set(0, 1.45, 0.02);
-  player.add(carryStack.group);
-
-  const chef = characterFactory('chef', 'chef-main');
-  chef.position.set(WORLD.oven.gx + 1.8, 0, WORLD.oven.gz + 1.0);
-  chef.scale.setScalar(0.94);
-  scene.add(chef);
-
-  function makeTable(spot, active = true) {
-    const table = {
-      gx: spot.gx,
-      gz: spot.gz,
-      seat: { gx: spot.gx, gz: spot.gz + 1 },
-      active,
-      capacity: 10,
-      stack: 0,
-      customerId: null,
-      occupied: false,
-      upgradeLevel: 1,
-      group: new THREE.Group(),
-      stackModel: makeStack(12),
-      ring: null,
-      stackLabel: null,
-      capLabel: null,
+    root.userData.rig = {
+      body,
+      head,
+      bodyRig,
+      handL,
+      handR,
+      footL,
+      footR,
+      hat,
+      blinkSeed: hashString(seedText + type),
+      type,
     };
 
-    const root = table.group;
-    root.position.set(spot.gx + 0.5, 0, spot.gz + 0.5);
-    root.add(createTableVisual());
+    return root;
+  }
 
-    const chairA = createChair();
-    chairA.position.set(0, 0, 0.68);
-    chairA.rotation.y = Math.PI;
-    const chairB = createChair();
-    chairB.position.set(0, 0, -0.68);
-    root.add(chairA, chairB);
-
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(0.9, 0.06, 8, 24),
-      new THREE.MeshStandardMaterial({ color: 0xffd166, emissive: 0x664400, roughness: 0.5 })
-    );
-    ring.rotation.x = Math.PI / 2;
-    ring.position.set(0, 0.08, 0);
-    ring.visible = false;
-    root.add(ring);
-
-    const stack = makeStack(12);
-    stack.group.position.set(0, 0.82, 0);
-    root.add(stack.group);
-
-    const stackLabel = makeLabelSprite('0', '#1f2937', '#fff', 0.9, 0.45);
-    stackLabel.sprite.position.set(0, 1.85, 0);
-    root.add(stackLabel.sprite);
-
-    const capLabel = makeLabelSprite('10', '#1f2937', '#fff', 0.9, 0.45);
-    capLabel.sprite.position.set(0.55, 1.85, 0.1);
-    root.add(capLabel.sprite);
-
-    table.stackModel = stack;
-    table.ring = ring;
-    table.stackLabel = stackLabel;
-    table.capLabel = capLabel;
-    return table;
+  function makeTableVisual() {
+    const group = new THREE.Group();
+    const top = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.12, 0.9), new THREE.MeshStandardMaterial({ color: 0xc49a6c, roughness: 0.95 }));
+    top.position.y = 0.72;
+    const legMat = new THREE.MeshStandardMaterial({ color: 0x6d4c3a, roughness: 0.95 });
+    [[-0.55, 0.35], [0.55, 0.35], [-0.55, -0.35], [0.55, -0.35]].forEach(([x, z]) => {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.74, 0.08), legMat);
+      leg.position.set(x, 0.37, z);
+      group.add(leg);
+    });
+    group.add(top);
+    return group;
   }
 
   function createChair() {
@@ -590,12 +386,12 @@
     const back = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.34, 0.06), new THREE.MeshStandardMaterial({ color: 0x7a573f, roughness: 0.95 }));
     back.position.set(0, 0.68, -0.14);
     const legMat = new THREE.MeshStandardMaterial({ color: 0x6d4c3a, roughness: 0.95 });
-    const legs = [ [-0.14, -0.14], [0.14, -0.14], [-0.14, 0.14], [0.14, 0.14] ].map(([x, z]) => {
+    [[-0.14, -0.14], [0.14, -0.14], [-0.14, 0.14], [0.14, 0.14]].forEach(([x, z]) => {
       const leg = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.42, 0.04), legMat);
       leg.position.set(x, 0.21, z);
-      return leg;
+      group.add(leg);
     });
-    group.add(seat, back, ...legs);
+    group.add(seat, back);
     return group;
   }
 
@@ -606,28 +402,64 @@
     state.particles.push({ sprite: p.sprite, life: 1, speed: 0.4 });
   }
 
-  function updateTableVisuals(table) {
-    table.stackModel.setCount(table.stack);
-    table.stackLabel.draw(String(table.stack));
-    table.capLabel.draw(String(table.capacity));
+  function block(gx, gz) {
+    if (gx >= 0 && gz >= 0 && gx < GRID_W && gz < GRID_H) blocked[gz][gx] = true;
   }
 
-  function updateHud() {
-    ui.money.textContent = Math.floor(state.money);
-    ui.stock.textContent = state.stock;
-    ui.carry.textContent = `${state.carry}/${state.carryCap}`;
-    ui.oven.textContent = Math.max(0, Math.floor(ovenStack.count));
-    ui.waiting.textContent = state.customers.filter(c => c.state === 'waiting').length;
-    ui.rep.textContent = state.rep;
-    ui.upgradeCarryBtn.textContent = `Kapacita (${15 * state.carryCap})`;
-    ui.upgradeOvenBtn.textContent = `Pec (${20 * state.ovenLevel})`;
-    if (adBtn) {
-      const remaining = Math.max(0, Math.ceil((state.adCooldownAt - performance.now()) / 1000));
-      adBtn.textContent = remaining > 0 ? `Reklama (${remaining}s)` : 'Reklama +5';
+  function rebuildBlockedMap() {
+    for (let z = 0; z < GRID_H; z++) {
+      for (let x = 0; x < GRID_W; x++) blocked[z][x] = false;
+    }
+    for (let x = 0; x < GRID_W; x++) {
+      block(x, 0);
+      block(x, GRID_H - 1);
+    }
+    for (let z = 0; z < GRID_H; z++) {
+      block(0, z);
+      block(GRID_W - 1, z);
+    }
+    for (let x = 1; x < GRID_W - 1; x++) {
+      if (x !== WORLD.entrance.gx) block(x, 7);
+    }
+    for (let z = 1; z < 7; z++) {
+      block(4, z);
+      block(15, z);
+    }
+    block(WORLD.stock.gx, WORLD.stock.gz);
+    block(WORLD.oven.gx, WORLD.oven.gz);
+    block(WORLD.counter.gx, WORLD.counter.gz);
+    block(WORLD.cash.gx, WORLD.cash.gz);
+
+    for (const t of tables) {
+      if (!t.active) continue;
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dz = -1; dz <= 1; dz++) {
+          const gx = t.gx + dx;
+          const gz = t.gz + dz;
+          if (gx === t.seat.gx && gz === t.seat.gz) continue;
+          block(gx, gz);
+        }
+      }
     }
   }
 
-  function createPath(start, goal) {
+  function cellBlocked(gx, gz) {
+    return gx < 0 || gz < 0 || gx >= GRID_W || gz >= GRID_H || blocked[gz][gx];
+  }
+
+  function canOccupy(x, z, radius = 0.32) {
+    const points = [
+      [0, 0], [radius, 0], [-radius, 0], [0, radius], [0, -radius],
+      [radius, radius], [radius, -radius], [-radius, radius], [-radius, -radius],
+    ];
+    for (const [dx, dz] of points) {
+      const c = worldToCell(x + dx, z + dz);
+      if (cellBlocked(c.gx, c.gz)) return false;
+    }
+    return true;
+  }
+
+  function findPath(start, goal) {
     const queue = [start];
     const prev = new Map();
     const seen = new Set([`${start.gx},${start.gz}`]);
@@ -658,24 +490,220 @@
     return [];
   }
 
-  function findNearestTable() {
-    let best = null;
-    let bestD = Infinity;
-    for (const table of tables) {
-      if (!table.active) continue;
-      const c = cellCenter(table.gx, table.gz);
-      const d = dist(state.player.x, state.player.z, c.x, c.z);
-      if (d < bestD) {
-        bestD = d;
-        best = table;
+  function buildTable(spot, active = true) {
+    const table = {
+      gx: spot.gx,
+      gz: spot.gz,
+      seat: { gx: spot.gx, gz: spot.gz + 1 },
+      active,
+      capacity: 10,
+      stack: 0,
+      customerId: null,
+      occupied: false,
+      upgradeLevel: 1,
+      group: new THREE.Group(),
+      stackModel: makeStack(12),
+      ring: null,
+      stackLabel: null,
+      capLabel: null,
+    };
+
+    const root = table.group;
+    root.position.set(spot.gx + 0.5, 0, spot.gz + 0.5);
+    root.add(makeTableVisual());
+
+    const chairA = createChair();
+    chairA.position.set(0, 0, 0.68);
+    chairA.rotation.y = Math.PI;
+    const chairB = createChair();
+    chairB.position.set(0, 0, -0.68);
+    root.add(chairA, chairB);
+
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(0.9, 0.06, 8, 24),
+      new THREE.MeshStandardMaterial({ color: 0xffd166, emissive: 0x664400, roughness: 0.5 })
+    );
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(0, 0.08, 0);
+    ring.visible = false;
+    root.add(ring);
+
+    const stack = makeStack(12);
+    stack.group.position.set(0, 0.82, 0);
+    root.add(stack.group);
+
+    const stackLabel = makeLabelSprite('0', '#1f2937', '#fff', 0.9, 0.45);
+    stackLabel.sprite.position.set(0, 1.85, 0);
+    root.add(stackLabel.sprite);
+    const capLabel = makeLabelSprite('10', '#1f2937', '#fff', 0.9, 0.45);
+    capLabel.sprite.position.set(0.55, 1.85, 0.1);
+    root.add(capLabel.sprite);
+
+    table.stackModel = stack;
+    table.ring = ring;
+    table.stackLabel = stackLabel;
+    table.capLabel = capLabel;
+    return table;
+  }
+
+  function updateTableVisuals(table) {
+    table.stackModel.setCount(table.stack);
+    table.stackLabel.draw(String(table.stack));
+    table.capLabel.draw(String(table.capacity));
+  }
+
+  function createScene() {
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+    renderer.setSize(window.innerWidth, window.innerHeight, false);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x16202d);
+    scene.fog = new THREE.Fog(0x16202d, 18, 34);
+
+    camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(14.5, 18.5, 15.5);
+    camera.lookAt(10, 0.8, 10);
+
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x314053, 1.35);
+    scene.add(hemi);
+    const dir = new THREE.DirectionalLight(0xffffff, 1.8);
+    dir.position.set(10, 18, 6);
+    scene.add(dir);
+    const fill = new THREE.DirectionalLight(0xffd8ad, 0.55);
+    fill.position.set(-8, 6, -8);
+    scene.add(fill);
+
+    const floorTex = makeCanvasTexture((ctx, w, h) => {
+      ctx.fillStyle = '#d6ba83';
+      ctx.fillRect(0, 0, w, h);
+      const tile = w / 8;
+      for (let y = 0; y < 8; y++) {
+        for (let x = 0; x < 8; x++) {
+          ctx.fillStyle = (x + y) % 2 === 0 ? '#e5cd9c' : '#d8b779';
+          ctx.fillRect(x * tile, y * tile, tile, tile);
+          ctx.fillStyle = 'rgba(0,0,0,0.03)';
+          ctx.fillRect(x * tile, y * tile, tile, tile);
+        }
       }
+      ctx.strokeStyle = 'rgba(90,60,35,0.18)';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(2, 2, w - 4, h - 4);
+    });
+    floorTex.repeat.set(2, 2);
+
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(20, 20),
+      new THREE.MeshStandardMaterial({ map: floorTex, roughness: 1 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(10, 0, 10);
+    scene.add(floor);
+    scene.add(new THREE.GridHelper(20, 20, 0x8c6a43, 0xc7b088));
+
+    function makeWall(x, z, h) {
+      const wall = new THREE.Mesh(
+        new THREE.BoxGeometry(1, h, 1),
+        new THREE.MeshStandardMaterial({ color: 0x89593f, roughness: 0.98 })
+      );
+      wall.position.set(x, h / 2, z);
+      return wall;
     }
-    return best;
+
+    for (let x = 0; x < GRID_W; x++) {
+      if (x !== WORLD.entrance.gx) scene.add(makeWall(x + 0.5, 0.5, 2.6));
+      scene.add(makeWall(x + 0.5, 19.5, 2.6));
+    }
+    for (let z = 0; z < GRID_H; z++) {
+      scene.add(makeWall(0.5, z + 0.5, 2.6));
+      scene.add(makeWall(19.5, z + 0.5, 2.6));
+    }
+    for (let x = 1; x < GRID_W - 1; x++) if (x !== WORLD.entrance.gx) scene.add(makeWall(x + 0.5, 7.5, 2.2));
+    for (let z = 1; z < 7; z++) {
+      scene.add(makeWall(4.5, z + 0.5, 2.2));
+      scene.add(makeWall(15.5, z + 0.5, 2.2));
+    }
+
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.45, 0.2), new THREE.MeshStandardMaterial({ color: 0x22314a, roughness: 0.6 }));
+    sign.position.set(10, 2.1, 8.2);
+    scene.add(sign);
+    const signLabel = makeLabelSprite('RESTAURANT ZOMBIE', '#111827', '#fff', 2.1, 0.8);
+    signLabel.sprite.position.set(10, 2.9, 8.3);
+    scene.add(signLabel.sprite);
+
+    const stockCrate = new THREE.Group();
+    const crateMat = new THREE.MeshStandardMaterial({ color: 0x5e452f, roughness: 1 });
+    for (let i = 0; i < 3; i++) {
+      const box = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.5, 0.8), crateMat);
+      box.position.set((i % 2) * 0.1, 0.25 + i * 0.18, (i % 2) * 0.04);
+      stockCrate.add(box);
+    }
+    stockCrate.position.set(WORLD.stock.gx + 0.5, 0, WORLD.stock.gz + 0.5);
+    scene.add(stockCrate);
+
+    const ovenBody = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.9, 1.0), new THREE.MeshStandardMaterial({ color: 0xa25136, roughness: 0.95 }));
+    ovenBody.position.set(WORLD.oven.gx + 0.5, 0.45, WORLD.oven.gz + 0.5);
+    scene.add(ovenBody);
+    const ovenTop = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.16, 0.92), new THREE.MeshStandardMaterial({ color: 0xf1d19b, roughness: 0.95 }));
+    ovenTop.position.set(WORLD.oven.gx + 0.5, 0.98, WORLD.oven.gz + 0.5);
+    scene.add(ovenTop);
+    ovenTray = new THREE.Group();
+    ovenTray.position.set(WORLD.oven.gx + 0.5, 1.08, WORLD.oven.gz + 0.5);
+    scene.add(ovenTray);
+
+    const counter = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.95, 0.8), new THREE.MeshStandardMaterial({ color: 0x4f7f68, roughness: 0.95 }));
+    counter.position.set(WORLD.counter.gx + 0.5, 0.48, WORLD.counter.gz + 0.5);
+    scene.add(counter);
+    const counterTop = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.12, 0.86), new THREE.MeshStandardMaterial({ color: 0xdde8dd, roughness: 0.95 }));
+    counterTop.position.set(WORLD.counter.gx + 0.5, 0.98, WORLD.counter.gz + 0.5);
+    scene.add(counterTop);
+
+    const cashDesk = new THREE.Mesh(new THREE.BoxGeometry(1.35, 1.0, 0.85), new THREE.MeshStandardMaterial({ color: 0x647cff, roughness: 0.95 }));
+    cashDesk.position.set(WORLD.cash.gx + 0.5, 0.5, WORLD.cash.gz + 0.5);
+    scene.add(cashDesk);
+
+    player = makePearCharacter('player', 'player-main');
+    player.position.set(state.player.x, 0, state.player.z);
+    scene.add(player);
+    carryStack = makeStack(12, 0.25);
+    carryStack.group.position.set(0, 1.45, 0.02);
+    player.add(carryStack.group);
+
+    chef = makePearCharacter('chef', 'chef-main');
+    chef.position.set(WORLD.oven.gx + 1.8, 0, WORLD.oven.gz + 1.0);
+    chef.scale.setScalar(0.94);
+    scene.add(chef);
+
+    for (const slot of TABLE_SLOTS) {
+      const table = buildTable(slot, tables.length < 4);
+      tables.push(table);
+      if (table.active) scene.add(table.group);
+      updateTableVisuals(table);
+    }
+
+    ovenStack = makeStack(12, 0.1);
+    ovenTray.add(ovenStack.group);
+    rebuildBlockedMap();
+  }
+
+  function updateHud() {
+    ui.money.textContent = Math.floor(state.money);
+    ui.stock.textContent = state.stock;
+    ui.carry.textContent = `${state.carry}/${state.carryCap}`;
+    ui.oven.textContent = Math.max(0, Math.floor(ovenStack.count));
+    ui.waiting.textContent = state.customers.filter(c => c.state === 'waiting' || c.state === 'eating' || c.state === 'paying').length;
+    ui.rep.textContent = state.rep;
+    ui.upgradeCarryBtn.textContent = `Kapacita (${15 * state.carryCap})`;
+    ui.upgradeOvenBtn.textContent = `Pec (${20 * state.ovenLevel})`;
+    const now = performance.now();
+    ui.actionBtn.textContent = now < state.adCooldownAt ? `${Math.ceil((state.adCooldownAt - now) / 1000)}s` : 'E';
   }
 
   function updatePlayer(dt) {
-    let dx = 0;
-    let dz = 0;
+    let dx = 0, dz = 0;
     if (state.keys['w'] || state.keys['arrowup']) dz -= 1;
     if (state.keys['s'] || state.keys['arrowdown']) dz += 1;
     if (state.keys['a'] || state.keys['arrowleft']) dx -= 1;
@@ -686,8 +714,7 @@
     }
     const len = Math.hypot(dx, dz);
     if (len > 0.001) {
-      dx /= len;
-      dz /= len;
+      dx /= len; dz /= len;
       const nx = state.player.x + dx * state.player.speed * dt;
       const nz = state.player.z + dz * state.player.speed * dt;
       if (canOccupy(nx, state.player.z)) state.player.x = nx;
@@ -699,11 +726,13 @@
     carryStack.group.position.y = 1.45 + Math.sin(performance.now() * 0.008) * 0.01;
   }
 
-  function updateChef(dt) {
-    chef.userData.rig.armL.rotation.x = 0.15 + Math.sin(performance.now() * 0.004) * 0.12;
-    chef.userData.rig.armR.rotation.x = 0.15 - Math.sin(performance.now() * 0.004) * 0.12;
-    chef.rotation.y = Math.sin(performance.now() * 0.0012) * 0.08;
-    chef.position.y = Math.sin(performance.now() * 0.006) * 0.02;
+  function updateChef() {
+    const r = chef.userData.rig;
+    if (!r) return;
+    const t = performance.now();
+    r.handL.rotation.z = -0.18 + Math.sin(t * 0.004) * 0.08;
+    r.handR.rotation.z = 0.18 - Math.sin(t * 0.004) * 0.08;
+    chef.rotation.y = Math.sin(t * 0.0012) * 0.08;
   }
 
   function updateOven(dt) {
@@ -720,9 +749,66 @@
     }
   }
 
+  function payAndLeave(customer) {
+    if (customer.paid) return;
+    customer.paid = true;
+    state.money += customer.reward;
+    state.rep += 1;
+    createPizzaParticle('+' + customer.reward, customer.table.gx + 0.5, customer.table.gz + 0.5, '#8fe08f');
+    customer.table.stack = 0;
+    customer.table.occupied = false;
+    customer.table.customerId = null;
+    updateTableVisuals(customer.table);
+    rebuildBlockedMap();
+    customer.state = 'leaving';
+    customer.path = findPath(worldToCell(customer.x, customer.z), WORLD.entrance);
+    customer.pathIndex = 0;
+    toast('Host zaplatil', `+${customer.reward}`);
+  }
+
+  function serveTable(table, customer) {
+    if (state.carry <= 0) {
+      toast('Nemáš pizzu');
+      return true;
+    }
+    if (table.stack >= table.capacity) {
+      toast('Stůl je plný');
+      return true;
+    }
+    state.carry -= 1;
+    table.stack += 1;
+    customer.served += 1;
+    carryStack.setCount(state.carry);
+    updateTableVisuals(table);
+    createPizzaParticle('-pizza', table.gx + 0.5, table.gz + 0.5, '#ffcf6f');
+    toast('Pizza podána', 'Na stůl přibyla další pizza.');
+    if (customer.state === 'waiting') customer.state = 'eating';
+    customer.eatTimer = 1.05;
+    if (customer.served >= customer.order && customer.state !== 'paying') {
+      customer.state = 'paying';
+      customer.payTimer = 0.9;
+    }
+    return true;
+  }
+
+  function interact() {
+    const nearest = findNearestTable();
+    if (nearest) {
+      const c = cellCenter(nearest.gx, nearest.gz);
+      if (dist(state.player.x, state.player.z, c.x, c.z) < 1.6) {
+        const customer = state.customers.find(x => x.table === nearest && !x.dead);
+        if (customer && serveTable(nearest, customer)) return;
+      }
+    }
+    if (collectFromOven()) return;
+    if (dist(state.player.x, state.player.z, WORLD.stock.gx + 0.5, WORLD.stock.gz + 0.5) < 1.25) return buyStock();
+    if (dist(state.player.x, state.player.z, WORLD.counter.gx + 0.5, WORLD.counter.gz + 0.5) < 1.25) return upgradeCarry();
+    if (dist(state.player.x, state.player.z, WORLD.cash.gx + 0.5, WORLD.cash.gz + 0.5) < 1.25) return upgradeOven();
+    toast('Nic k akci', 'Přibliž se ke stolu, peci nebo skladu.');
+  }
+
   function collectFromOven() {
-    const d = dist(state.player.x, state.player.z, WORLD.oven.gx + 0.5, WORLD.oven.gz + 0.5);
-    if (d > 1.25) return false;
+    if (dist(state.player.x, state.player.z, WORLD.oven.gx + 0.5, WORLD.oven.gz + 0.5) > 1.25) return false;
     const take = Math.min(ovenStack.count, state.carryCap - state.carry);
     if (take <= 0) {
       toast(ovenStack.count === 0 ? 'V peci nic není' : 'Máš plnou kapacitu');
@@ -758,10 +844,7 @@
 
   function upgradeCarry() {
     const cost = 15 * state.carryCap;
-    if (state.money < cost) {
-      toast('Málo peněz', `Potřebuješ ${cost}.`);
-      return;
-    }
+    if (state.money < cost) { toast('Málo peněz', `Potřebuješ ${cost}.`); return; }
     state.money -= cost;
     state.carryCap += 2;
     toast('Kapacita zvýšena', 'Uneseš více pizz.');
@@ -769,104 +852,22 @@
 
   function upgradeOven() {
     const cost = 20 * state.ovenLevel;
-    if (state.money < cost) {
-      toast('Málo peněz', `Potřebuješ ${cost}.`);
-      return;
-    }
+    if (state.money < cost) { toast('Málo peněz', `Potřebuješ ${cost}.`); return; }
     state.money -= cost;
     state.ovenLevel += 1;
     toast('Pec vylepšena', 'Pec bude rychlejší.');
   }
 
-  function addTable() {
-    const next = tables.find(t => !t.active);
-    if (!next) {
-      toast('Všechny stoly jsou už otevřené');
-      return;
+  function findNearestTable() {
+    let best = null;
+    let bestD = Infinity;
+    for (const table of tables) {
+      if (!table.active) continue;
+      const c = cellCenter(table.gx, table.gz);
+      const d = dist(state.player.x, state.player.z, c.x, c.z);
+      if (d < bestD) { bestD = d; best = table; }
     }
-    const cost = 40 + tables.filter(t => t.active).length * 20;
-    if (state.money < cost) {
-      toast('Málo peněz', `Potřebuješ ${cost}.`);
-      return;
-    }
-    state.money -= cost;
-    next.active = true;
-    scene.add(next.group);
-    block(next.gx, next.gz);
-    updateTableVisuals(next);
-    toast('Nový stůl otevřen', `Cena ${cost}.`);
-  }
-
-  function upgradeTable() {
-    const table = findNearestTable();
-    if (!table) {
-      toast('Žádný stůl poblíž');
-      return;
-    }
-    const cost = 25 + table.upgradeLevel * 20;
-    if (state.money < cost) {
-      toast('Málo peněz', `Potřebuješ ${cost}.`);
-      return;
-    }
-    state.money -= cost;
-    table.upgradeLevel += 1;
-    table.capacity += 5;
-    updateTableVisuals(table);
-    toast('Stůl vylepšen', `Kapacita ${table.capacity}.`);
-  }
-
-  function payAndLeave(customer) {
-    if (customer.paid) return;
-    customer.paid = true;
-    state.money += customer.reward;
-    state.rep += 1;
-    createPizzaParticle('+' + customer.reward, customer.table.gx + 0.5, customer.table.gz + 0.5, '#8fe08f');
-    customer.table.stack = 0;
-    customer.table.occupied = false;
-    customer.table.customerId = null;
-    updateTableVisuals(customer.table);
-    customer.state = 'leaving';
-    customer.path = createPath(worldToCell(customer.x, customer.z), WORLD.entrance);
-    customer.pathIndex = 0;
-    toast('Host zaplatil', `+${customer.reward}`);
-  }
-
-  function serveTable(table, customer) {
-    if (state.carry <= 0) {
-      toast('Nemáš pizzu');
-      return true;
-    }
-    if (table.stack >= table.capacity) {
-      toast('Stůl je plný');
-      return true;
-    }
-    state.carry -= 1;
-    table.stack += 1;
-    carryStack.setCount(state.carry);
-    updateTableVisuals(table);
-    createPizzaParticle('-pizza', table.gx + 0.5, table.gz + 0.5, '#ffcf6f');
-    toast('Pizza podána', 'Na stůl přibyla další pizza.');
-    if (customer.state === 'waiting' && table.stack > customer.eaten) {
-      customer.state = 'eating';
-      customer.eatTimer = 1.25;
-    }
-    return true;
-  }
-
-  function interact() {
-    const nearest = findNearestTable();
-    if (nearest) {
-      const c = cellCenter(nearest.gx, nearest.gz);
-      if (dist(state.player.x, state.player.z, c.x, c.z) < 1.6) {
-        const customer = state.customers.find(x => x.table === nearest && !x.dead);
-        if (customer && serveTable(nearest, customer)) return;
-      }
-    }
-    if (collectFromOven()) return;
-    if (dist(state.player.x, state.player.z, WORLD.stock.gx + 0.5, WORLD.stock.gz + 0.5) < 1.25) return buyStock();
-    if (dist(state.player.x, state.player.z, WORLD.counter.gx + 0.5, WORLD.counter.gz + 0.5) < 1.25) return upgradeCarry();
-    if (dist(state.player.x, state.player.z, WORLD.cash.gx + 0.5, WORLD.cash.gz + 0.5) < 1.25) return upgradeOven();
-    toast('Nic k akci', 'Přibliž se ke stolu, peci nebo skladu.');
+    return best;
   }
 
   function spawnCustomer(manual = false) {
@@ -876,7 +877,7 @@
       return;
     }
     const idSeed = 'cust-' + Math.random().toString(36).slice(2);
-    const customer = characterFactory('customer', idSeed);
+    const customer = makePearCharacter('customer', idSeed);
     customer.scale.setScalar(0.98);
     customer.position.set(WORLD.entrance.gx + 0.5, 0, WORLD.entrance.gz + 0.5);
     scene.add(customer);
@@ -892,25 +893,28 @@
       eatTimer: 0,
       payTimer: 0,
       order,
+      served: 0,
       eaten: 0,
       reward,
       path: [],
       pathIndex: 0,
       mesh: customer,
       paid: false,
+      dead: false,
     };
     table.occupied = true;
     table.customerId = c.id;
     table.stack = 0;
     updateTableVisuals(table);
-    c.path = createPath(worldToCell(c.x, c.z), table.seat);
+    rebuildBlockedMap();
+    c.path = findPath(worldToCell(c.x, c.z), table.seat);
     state.customers.push(c);
     toast('Host přišel', manual ? 'Přivolán ke stolu.' : 'Míří ke stolu.');
   }
 
   function updateCustomer(c, dt) {
     if (c.state === 'walking' || c.state === 'leaving') {
-      if (!c.path.length) c.path = createPath(worldToCell(c.x, c.z), c.state === 'walking' ? c.table.seat : WORLD.entrance);
+      if (!c.path.length) c.path = findPath(worldToCell(c.x, c.z), c.state === 'walking' ? c.table.seat : WORLD.entrance);
       const node = c.path[c.pathIndex];
       if (node) {
         const target = cellCenter(node.gx, node.gz);
@@ -939,17 +943,18 @@
       c.waitTimer -= dt;
       if (c.waitTimer <= 0) {
         c.state = 'leaving';
-        c.path = createPath(worldToCell(c.x, c.z), WORLD.entrance);
+        c.path = findPath(worldToCell(c.x, c.z), WORLD.entrance);
         c.pathIndex = 0;
         state.rep = Math.max(0, state.rep - 1);
         c.table.occupied = false;
         c.table.customerId = null;
         c.table.stack = 0;
         updateTableVisuals(c.table);
+        rebuildBlockedMap();
         toast('Host odchází', 'Příliš dlouhé čekání.');
       } else if (c.table.stack > c.eaten) {
         c.state = 'eating';
-        c.eatTimer = 1.25;
+        c.eatTimer = 1.05;
       }
     } else if (c.state === 'eating') {
       c.eatTimer -= dt;
@@ -960,14 +965,46 @@
           updateTableVisuals(c.table);
           createPizzaParticle('-pizza', c.table.gx + 0.5, c.table.gz + 0.5, '#ffcf6f');
         }
-        if (c.eaten >= c.order) {
-          payAndLeave(c);
+        if (c.served >= c.order || c.eaten >= c.order) {
+          c.state = 'paying';
+          c.payTimer = 0.75;
         } else {
           c.state = 'waiting';
         }
       }
+    } else if (c.state === 'paying') {
+      c.payTimer -= dt;
+      if (c.payTimer <= 0) payAndLeave(c);
     }
     c.mesh.position.set(c.x, 0, c.z);
+    animatePear(c.mesh, c, dt);
+  }
+
+  function animatePear(root, c, dt) {
+    const r = root.userData.rig;
+    if (!r) return;
+    const t = performance.now();
+    const speedFactor = c.state === 'walking' ? 0.55 : c.state === 'leaving' ? 0.3 : 0.12;
+    const walk = Math.sin(t * 0.012 + r.blinkSeed * 0.0001 + root.position.x * 0.2 + root.position.z * 0.17);
+    const swing = walk * (0.12 + speedFactor * 0.34);
+    const bob = Math.sin(t * 0.006 + r.blinkSeed * 0.0002) * (0.008 + speedFactor * 0.015);
+    const blink = 0.5 + 0.5 * Math.max(0, Math.sin(t * 0.0038 + r.blinkSeed * 0.0003));
+    r.body.position.y = 0.78 + bob * 0.25;
+    r.head.position.y = 1.78 + bob * 0.8;
+    r.head.rotation.y = Math.sin(t * 0.0016 + r.blinkSeed * 0.0001) * 0.04;
+    r.bodyRig.position.y = 0.15 + bob * 0.15;
+    r.handL.rotation.z = -0.12 + swing;
+    r.handR.rotation.z = 0.12 - swing;
+    r.footL.rotation.x = -0.12 - swing * 0.3;
+    r.footR.rotation.x = -0.12 + swing * 0.3;
+    if (r.footL.children[0]) r.footL.children[0].rotation.y = swing * 0.5;
+    if (r.footR.children[0]) r.footR.children[0].rotation.y = -swing * 0.5;
+    if (r.facePlane && r.facePlane.material) r.facePlane.material.needsUpdate = false;
+    if (r.hat) r.hat.rotation.y = r.head.rotation.y * 0.7;
+    const eyeBlink = blink;
+    if (r.body) r.body.scale.y = 1.08 + bob * 0.02;
+    // no eye meshes in this simplified rig; keep hook for future expansion
+    root.userData._blink = eyeBlink;
   }
 
   function updateParticles(dt) {
@@ -980,17 +1017,18 @@
       const p = state.particles[i];
       if (p.life > 0) continue;
       scene.remove(p.sprite);
-      if (p.sprite.material.map?.dispose) p.sprite.material.map.dispose();
+      if (p.sprite.material.map && p.sprite.material.map.dispose) p.sprite.material.map.dispose();
       p.sprite.material.dispose();
       state.particles.splice(i, 1);
     }
   }
 
-  function updateTables(dt) {
+  function updateTables() {
+    const now = performance.now();
     for (const t of tables) {
       if (!t.active) continue;
       t.ring.visible = dist(state.player.x, state.player.z, t.gx + 0.5, t.gz + 0.5) < 1.8;
-      t.ring.position.y = 0.08 + Math.sin(performance.now() * 0.004 + t.gx) * 0.02;
+      t.ring.position.y = 0.08 + Math.sin(now * 0.004 + t.gx) * 0.02;
     }
   }
 
@@ -1027,7 +1065,7 @@
   }
 
   const adBtn = makeRewardButton();
-  document.querySelector('.top-actions')?.appendChild(adBtn);
+  document.querySelector('.top-actions').appendChild(adBtn);
 
   function addButtons() {
     ui.spawnBtn.addEventListener('click', () => spawnCustomer(true));
@@ -1084,6 +1122,7 @@
           updateTableVisuals(tables[i]);
         });
       }
+      rebuildBlockedMap();
     } catch (err) {
       console.warn(err);
     }
@@ -1117,39 +1156,29 @@
     });
     ovenStack.count = 0;
     ovenStack.setCount(0);
+    carryStack.setCount(0);
+    rebuildBlockedMap();
     toast('Reset hotov');
   }
 
-  function updateLoop(now) {
-    const dt = Math.min(0.033, ((now || 0) - (updateLoop.last || now)) / 1000 || 0.016);
-    updateLoop.last = now || performance.now();
-
-    updatePlayer(dt);
-    updateChef(dt);
-    updateOven(dt);
-    state.lastSpawn += dt;
-    if (state.lastSpawn > 8.5 && state.customers.filter(c => !c.dead).length < 4) {
-      spawnCustomer(false);
-      state.lastSpawn = 0;
+  function onKeyDown(e) {
+    state.keys[e.key.toLowerCase()] = true;
+    if (e.key.toLowerCase() === 'e' || e.key === ' ') {
+      e.preventDefault();
+      interact();
     }
+  }
 
-    for (const c of state.customers) updateCustomer(c, dt);
-    for (let i = state.customers.length - 1; i >= 0; i--) if (state.customers[i].dead) state.customers.splice(i, 1);
-
-    updateParticles(dt);
-    updateTables(dt);
-    updateHud();
-    updateCamera(dt);
-    renderer.render(scene, camera);
-    requestAnimationFrame(updateLoop);
+  function onKeyUp(e) {
+    state.keys[e.key.toLowerCase()] = false;
   }
 
   function setStick(dx, dz) {
     const max = state.touch.max;
     const len = Math.hypot(dx, dz);
     if (len > max) {
-      dx = (dx / len) * max;
-      dz = (dz / len) * max;
+      dx = dx / len * max;
+      dz = dz / len * max;
     }
     ui.nub.style.transform = `translate(-50%, -50%) translate(${dx}px, ${dz}px)`;
     state.touch.dx = dx / max;
@@ -1212,52 +1241,148 @@
     window.addEventListener('pointercancel', end, { passive: false });
   }
 
-  function onKeyDown(e) {
-    state.keys[e.key.toLowerCase()] = true;
-    if (e.key.toLowerCase() === 'e' || e.key === ' ') {
-      e.preventDefault();
-      interact();
-    }
-  }
-
-  function onKeyUp(e) {
-    state.keys[e.key.toLowerCase()] = false;
-  }
-
   function initWorld() {
-    rebuildBlockedMap();
+    createScene();
+    initTables();
+    setupJoystick();
+    addButtons();
+    load();
+    state.player.x = clamp(state.player.x, 1.2, GRID_W - 1.2);
+    state.player.z = clamp(state.player.z, 1.2, GRID_H - 1.2);
+    player.position.set(state.player.x, 0, state.player.z);
+    ovenStack.setCount(ovenStack.count);
+    carryStack.setCount(state.carry);
+    toast('Engine ready', 'Nové modely, spolehlivé placení a pevné kolize.');
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('resize', () => {
+      renderer.setSize(window.innerWidth, window.innerHeight, false);
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+    });
+    requestAnimationFrame(loop);
+  }
+
+  function initTables() {
     for (const slot of TABLE_SLOTS) {
-      const table = makeTable(slot, tables.length < 4);
+      const table = buildTable(slot, tables.length < 4);
       tables.push(table);
       if (table.active) scene.add(table.group);
       updateTableVisuals(table);
     }
-    ovenStack.setCount(0);
-    carryStack.setCount(0);
+    rebuildBlockedMap();
   }
 
-  const ovenStack = makeStack(12, 0.1);
-  ovenStack.group.position.set(0, 0, 0);
-  ovenTray.add(ovenStack.group);
+  function updateCustomerState(c, dt) {
+    if (c.state === 'walking' || c.state === 'leaving') {
+      if (!c.path.length) c.path = findPath(worldToCell(c.x, c.z), c.state === 'walking' ? c.table.seat : WORLD.entrance);
+      const node = c.path[c.pathIndex];
+      if (node) {
+        const target = cellCenter(node.gx, node.gz);
+        const dx = target.x - c.x;
+        const dz = target.z - c.z;
+        const d = Math.hypot(dx, dz);
+        if (d < 0.05) {
+          if (c.pathIndex < c.path.length - 1) c.pathIndex += 1;
+          else if (c.state === 'walking') {
+            c.state = 'waiting';
+            c.waitTimer = 18 + Math.random() * 10;
+            toast('Host sedí', `Objednal ${c.order} pizz.`);
+          } else {
+            c.dead = true;
+            scene.remove(c.mesh);
+          }
+        } else {
+          const speed = c.state === 'walking' ? 1.9 : 2.2;
+          c.x += (dx / d) * speed * dt;
+          c.z += (dz / d) * speed * dt;
+          c.mesh.position.set(c.x, 0, c.z);
+          c.mesh.rotation.y = Math.atan2(dx, dz);
+        }
+      }
+    } else if (c.state === 'waiting') {
+      c.waitTimer -= dt;
+      if (c.waitTimer <= 0) {
+        c.state = 'leaving';
+        c.path = findPath(worldToCell(c.x, c.z), WORLD.entrance);
+        c.pathIndex = 0;
+        state.rep = Math.max(0, state.rep - 1);
+        c.table.occupied = false;
+        c.table.customerId = null;
+        c.table.stack = 0;
+        updateTableVisuals(c.table);
+        rebuildBlockedMap();
+        toast('Host odchází', 'Příliš dlouhé čekání.');
+      } else if (c.table.stack > c.eaten) {
+        c.state = 'eating';
+        c.eatTimer = 1.05;
+      }
+    } else if (c.state === 'eating') {
+      c.eatTimer -= dt;
+      if (c.eatTimer <= 0) {
+        if (c.table.stack > 0) {
+          c.table.stack -= 1;
+          c.eaten += 1;
+          updateTableVisuals(c.table);
+          createPizzaParticle('-pizza', c.table.gx + 0.5, c.table.gz + 0.5, '#ffcf6f');
+        }
+        if (c.served >= c.order || c.eaten >= c.order) {
+          c.state = 'paying';
+          c.payTimer = 0.75;
+        } else {
+          c.state = 'waiting';
+        }
+      }
+    } else if (c.state === 'paying') {
+      c.payTimer -= dt;
+      if (c.payTimer <= 0) payAndLeave(c);
+    }
+    c.mesh.position.set(c.x, 0, c.z);
+    animatePear(c.mesh, c, dt);
+  }
+
+  function animatePear(root, c, dt) {
+    const r = root.userData.rig;
+    if (!r) return;
+    const t = performance.now();
+    const speedFactor = c.state === 'walking' ? 0.55 : c.state === 'leaving' ? 0.3 : 0.12;
+    const walk = Math.sin(t * 0.012 + r.blinkSeed * 0.0001 + root.position.x * 0.2 + root.position.z * 0.17);
+    const swing = walk * (0.12 + speedFactor * 0.34);
+    const bob = Math.sin(t * 0.006 + r.blinkSeed * 0.0002) * (0.008 + speedFactor * 0.015);
+    r.body.position.y = 0.78 + bob * 0.25;
+    r.head.position.y = 1.78 + bob * 0.8;
+    r.bodyRig.position.y = 0.15 + bob * 0.15;
+    r.handL.rotation.z = -0.12 + swing;
+    r.handR.rotation.z = 0.12 - swing;
+    r.footL.rotation.x = -0.12 - swing * 0.3;
+    r.footR.rotation.x = -0.12 + swing * 0.3;
+    if (r.footL.children[0]) r.footL.children[0].rotation.y = swing * 0.5;
+    if (r.footR.children[0]) r.footR.children[0].rotation.y = -swing * 0.5;
+    r.hat.rotation.y = Math.sin(t * 0.0016 + r.blinkSeed * 0.0001) * 0.03;
+  }
+
+  function loop(now) {
+    const dt = Math.min(0.033, ((now || 0) - (loop.last || now)) / 1000 || 0.016);
+    loop.last = now || performance.now();
+
+    updatePlayer(dt);
+    updateChef();
+    updateOven(dt);
+    state.lastSpawn += dt;
+    if (state.lastSpawn > 8.5 && state.customers.filter(c => !c.dead).length < 4) {
+      spawnCustomer(false);
+      state.lastSpawn = 0;
+    }
+    for (const c of state.customers) updateCustomerState(c, dt);
+    for (let i = state.customers.length - 1; i >= 0; i--) if (state.customers[i].dead) state.customers.splice(i, 1);
+    updateParticles(dt);
+    updateTables();
+    updateHud();
+    updateCamera(dt);
+    renderer.render(scene, camera);
+    requestAnimationFrame(loop);
+  }
 
   initWorld();
-  setupJoystick();
-  addButtons();
-  load();
-
-  state.player.x = clamp(state.player.x, 1.2, GRID_W - 1.2);
-  state.player.z = clamp(state.player.z, 1.2, GRID_H - 1.2);
-  player.position.set(state.player.x, 0, state.player.z);
-  ovenStack.setCount(ovenStack.count);
-  carryStack.setCount(state.carry);
-  toast('Engine ready', 'Nové modely, opravené platby a bezpečná ekonomika.');
-  window.addEventListener('keydown', onKeyDown);
-  window.addEventListener('keyup', onKeyUp);
-  window.addEventListener('resize', () => {
-    renderer.setSize(window.innerWidth, window.innerHeight, false);
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
-  });
-  requestAnimationFrame(updateLoop);
 })();
