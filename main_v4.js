@@ -1,27 +1,28 @@
 (() => {
-  const canvas = document.getElementById("game");
+  const canvas = document.getElementById('game');
   const ui = {
-    money: document.getElementById("money"),
-    stock: document.getElementById("stock"),
-    carry: document.getElementById("carry"),
-    oven: document.getElementById("oven"),
-    waiting: document.getElementById("waiting"),
-    rep: document.getElementById("rep"),
-    toast: document.getElementById("toast"),
-    spawnBtn: document.getElementById("spawnBtn"),
-    buyStockBtn: document.getElementById("buyStockBtn"),
-    upgradeCarryBtn: document.getElementById("upgradeCarryBtn"),
-    upgradeOvenBtn: document.getElementById("upgradeOvenBtn"),
-    saveBtn: document.getElementById("saveBtn"),
-    resetBtn: document.getElementById("resetBtn"),
-    actionBtn: document.getElementById("actionBtn"),
-    stick: document.getElementById("stick"),
-    nub: document.getElementById("nub"),
+    money: document.getElementById('money'),
+    stock: document.getElementById('stock'),
+    carry: document.getElementById('carry'),
+    oven: document.getElementById('oven'),
+    waiting: document.getElementById('waiting'),
+    rep: document.getElementById('rep'),
+    toast: document.getElementById('toast'),
+    spawnBtn: document.getElementById('spawnBtn'),
+    buyStockBtn: document.getElementById('buyStockBtn'),
+    upgradeCarryBtn: document.getElementById('upgradeCarryBtn'),
+    upgradeOvenBtn: document.getElementById('upgradeOvenBtn'),
+    saveBtn: document.getElementById('saveBtn'),
+    resetBtn: document.getElementById('resetBtn'),
+    actionBtn: document.getElementById('actionBtn'),
+    stick: document.getElementById('stick'),
+    nub: document.getElementById('nub'),
   };
 
-  const SAVE_KEY = "restaurant-zombie-v8";
+  const SAVE_KEY = 'restaurant-zombie-v9';
   const GRID_W = 20;
   const GRID_H = 20;
+  const START_ACTIVE_TABLES = 2;
   const BUILD_SPOTS = [
     { gx: 5, gz: 9, cost: 60 },
     { gx: 14, gz: 9, cost: 75 },
@@ -30,7 +31,6 @@
     { gx: 3, gz: 11, cost: 130 },
     { gx: 16, gz: 11, cost: 150 },
   ];
-  const START_ACTIVE_TABLES = 2;
   const WORLD = {
     stock: { gx: 3, gz: 3 },
     oven: { gx: 6, gz: 4 },
@@ -60,18 +60,24 @@
   const blocked = Array.from({ length: GRID_H }, () => Array(GRID_W).fill(false));
   const tables = [];
   const buildMarkers = [];
-  let renderer, scene, camera, player, chef, carryStack, ovenStack;
+  let renderer;
+  let scene;
+  let camera;
+  let player;
+  let chef;
+  let carryStack;
+  let ovenStack;
 
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const dist = (ax, az, bx, bz) => Math.hypot(ax - bx, az - bz);
   const cellCenter = (gx, gz) => ({ x: gx + 0.5, z: gz + 0.5 });
   const worldToCell = (x, z) => ({ gx: Math.floor(x), gz: Math.floor(z) });
 
-  function toast(title, sub = "") {
-    ui.toast.innerHTML = `<strong>${title}</strong>${sub ? `<div class="small">${sub}</div>` : ""}`;
-    ui.toast.classList.add("show");
+  function toast(title, sub = '') {
+    ui.toast.innerHTML = `<strong>${title}</strong>${sub ? `<div class="small">${sub}</div>` : ''}`;
+    ui.toast.classList.add('show');
     clearTimeout(ui.toast._timer);
-    ui.toast._timer = setTimeout(() => ui.toast.classList.remove("show"), 1500);
+    ui.toast._timer = setTimeout(() => ui.toast.classList.remove('show'), 1500);
   }
 
   function roundedRectPath(ctx, x, y, w, h, r) {
@@ -89,11 +95,20 @@
     ctx.closePath();
   }
 
+  function hashString(text) {
+    let h = 2166136261;
+    for (let i = 0; i < text.length; i++) {
+      h ^= text.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+
   function makeCanvasTexture(drawFn, size = 256) {
-    const c = document.createElement("canvas");
+    const c = document.createElement('canvas');
     c.width = size;
     c.height = size;
-    const ctx = c.getContext("2d");
+    const ctx = c.getContext('2d');
     drawFn(ctx, size, size);
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -101,11 +116,11 @@
     return tex;
   }
 
-  function makeLabelSprite(text, bg = "#111827", fg = "#fff", scaleX = 2.6, scaleY = 1.15) {
-    const c = document.createElement("canvas");
+  function makeLabelSprite(text, bg = '#111827', fg = '#fff', scaleX = 2.6, scaleY = 1.15) {
+    const c = document.createElement('canvas');
     c.width = 512;
     c.height = 256;
-    const ctx = c.getContext("2d");
+    const ctx = c.getContext('2d');
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.minFilter = THREE.LinearFilter;
@@ -116,13 +131,13 @@
       ctx.fillStyle = bg;
       roundedRectPath(ctx, 24, 44, 464, 168, 32);
       ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,0.18)";
+      ctx.strokeStyle = 'rgba(255,255,255,0.18)';
       ctx.lineWidth = 6;
       ctx.stroke();
       ctx.fillStyle = fg;
-      ctx.font = "900 56px system-ui, Arial";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
+      ctx.font = '900 56px system-ui, Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
       ctx.fillText(value, 256, 128);
       tex.needsUpdate = true;
     }
@@ -174,24 +189,15 @@
     return shadow;
   }
 
-  function hashString(text) {
-    let h = 2166136261;
-    for (let i = 0; i < text.length; i++) {
-      h ^= text.charCodeAt(i);
-      h = Math.imul(h, 16777619);
-    }
-    return h >>> 0;
-  }
-
-  function paletteFor(type, seedText = "") {
-    if (type === "player") return { body: 0x4d78b5, pants: 0x24324c, skin: 0xf0ceb1, accent: 0x8ecae6, hair: 0x253047 };
-    if (type === "chef") return { body: 0xf8f6f0, pants: 0x70533d, skin: 0xf0ceb1, accent: 0xc6b08f, hair: 0x1f1f1f };
+  function paletteFor(type, seedText = '') {
+    if (type === 'player') return { body: 0x4d78b5, skin: 0xf0ceb1, accent: 0x8ecae6, hair: 0x253047 };
+    if (type === 'chef') return { body: 0xf8f6f0, skin: 0xf0ceb1, accent: 0xc6b08f, hair: 0x1f1f1f };
     const sets = [
-      { body: 0x5f7dd6, pants: 0x2f3644, skin: 0xf1ccb0, accent: 0xffc857, hair: 0x3f2e24 },
-      { body: 0xd96c6c, pants: 0x3d2f3d, skin: 0xefc8a4, accent: 0x8fe08f, hair: 0x2c2a28 },
-      { body: 0x4c9b72, pants: 0x2c3943, skin: 0xe9c5aa, accent: 0xf2d56b, hair: 0x5e452f },
-      { body: 0x9e78d2, pants: 0x40324f, skin: 0xeec7aa, accent: 0x7ee0ff, hair: 0x1c1f27 },
-      { body: 0x729f5d, pants: 0x3d4331, skin: 0xe5c0a3, accent: 0xc8d18a, hair: 0x50372b },
+      { body: 0x5f7dd6, skin: 0xf1ccb0, accent: 0xffc857, hair: 0x3f2e24 },
+      { body: 0xd96c6c, skin: 0xefc8a4, accent: 0x8fe08f, hair: 0x2c2a28 },
+      { body: 0x4c9b72, skin: 0xe9c5aa, accent: 0xf2d56b, hair: 0x5e452f },
+      { body: 0x9e78d2, skin: 0xeec7aa, accent: 0x7ee0ff, hair: 0x1c1f27 },
+      { body: 0x729f5d, skin: 0xe5c0a3, accent: 0xc8d18a, hair: 0x50372b },
     ];
     let h = 0;
     for (const ch of seedText) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
@@ -199,15 +205,14 @@
   }
 
   function makeFaceTexture(seed, skin, hair) {
-    const c = document.createElement("canvas");
+    const c = document.createElement('canvas');
     c.width = 256;
     c.height = 256;
-    const ctx = c.getContext("2d");
-    ctx.fillStyle = `#${skin.toString(16).padStart(6, "0")}`;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = `#${skin.toString(16).padStart(6, '0')}`;
     ctx.fillRect(0, 0, 256, 256);
-
     const variant = seed % 4;
-    ctx.fillStyle = `#${hair.toString(16).padStart(6, "0")}`;
+    ctx.fillStyle = `#${hair.toString(16).padStart(6, '0')}`;
     ctx.beginPath();
     ctx.ellipse(128, 92, 95, 92, 0, Math.PI, 0);
     ctx.fill();
@@ -225,15 +230,14 @@
       ctx.fillRect(46, 60, 24, 54);
       ctx.fillRect(186, 60, 24, 54);
     }
-
-    ctx.fillStyle = "#141414";
+    ctx.fillStyle = '#141414';
     ctx.beginPath(); ctx.arc(88, 126, 11, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(168, 126, 11, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "rgba(240,120,120,0.18)";
+    ctx.fillStyle = 'rgba(240,120,120,0.18)';
     ctx.beginPath(); ctx.arc(72, 150, 16, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(184, 150, 16, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "rgba(175,120,100,0.95)";
-    if (typeof ctx.roundRect === "function") {
+    ctx.fillStyle = 'rgba(175,120,100,0.95)';
+    if (typeof ctx.roundRect === 'function') {
       ctx.beginPath();
       ctx.roundRect(121, 136, 14, 26, 7);
       ctx.fill();
@@ -241,11 +245,10 @@
       roundedRectPath(ctx, 121, 136, 14, 26, 7);
       ctx.fill();
     }
-    ctx.strokeStyle = "#6b2b2b";
+    ctx.strokeStyle = '#6b2b2b';
     ctx.lineWidth = 8;
-    ctx.lineCap = "round";
+    ctx.lineCap = 'round';
     ctx.beginPath(); ctx.arc(128, 172, 18, 0.1 * Math.PI, 0.9 * Math.PI); ctx.stroke();
-
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.minFilter = THREE.LinearFilter;
@@ -259,7 +262,6 @@
     const root = new THREE.Group();
     root.userData.characterType = type;
     root.userData.seed = seedText;
-
     root.add(createShadow(0.18, 0.4));
 
     const rig = new THREE.Group();
@@ -275,16 +277,9 @@
     rig.add(body);
 
     const head = new THREE.Group();
-    const headMat = new THREE.MeshStandardMaterial({
-      color: palette.skin,
-      map: makeFaceTexture(hashString(seedText), palette.skin, palette.hair),
-      roughness: 0.95,
-    });
+    const headMat = new THREE.MeshStandardMaterial({ color: palette.skin, map: makeFaceTexture(hashString(seedText), palette.skin, palette.hair), roughness: 0.95 });
     const skull = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 8), headMat);
-    const hair = new THREE.Mesh(
-      new THREE.SphereGeometry(0.34, 10, 8),
-      new THREE.MeshStandardMaterial({ color: palette.hair, roughness: 0.95 })
-    );
+    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.34, 10, 8), new THREE.MeshStandardMaterial({ color: palette.hair, roughness: 0.95 }));
     hair.scale.set(1.0, 0.72, 0.92);
     hair.position.set(0, 0.04, -0.02);
     head.add(skull, hair);
@@ -293,14 +288,12 @@
 
     function makeHand(side) {
       const g = new THREE.Group();
-      const cuff = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.04, 0.05, 0.14, 6),
-        new THREE.MeshStandardMaterial({ color: palette.body, roughness: 0.94 })
-      );
+      const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.14, 6), new THREE.MeshStandardMaterial({ color: palette.body, roughness: 0.94 }));
       cuff.rotation.z = Math.PI / 2;
       cuff.position.x = side * -0.05;
-      const palm = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), new THREE.MeshStandardMaterial({ color: palette.skin, roughness: 0.96 }));
-      const finger1 = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 6), palm.material);
+      const palmMat = new THREE.MeshStandardMaterial({ color: palette.skin, roughness: 0.96 });
+      const palm = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), palmMat);
+      const finger1 = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 6), palmMat);
       const finger2 = finger1.clone();
       const finger3 = finger1.clone();
       palm.position.x = 0.1;
@@ -315,7 +308,7 @@
 
     function makeFoot(side) {
       const g = new THREE.Group();
-      const shoeMat = new THREE.MeshStandardMaterial({ color: type === "chef" ? 0x1f1f1f : 0x1d2230, roughness: 1 });
+      const shoeMat = new THREE.MeshStandardMaterial({ color: type === 'chef' ? 0x1f1f1f : 0x1d2230, roughness: 1 });
       const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.1, 0.34), shoeMat);
       const toe = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), shoeMat);
       shoe.position.y = 0.02;
@@ -332,7 +325,7 @@
     rig.add(handL, handR, footL, footR);
 
     const hat = new THREE.Group();
-    if (type === "chef") {
+    if (type === 'chef') {
       const white = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.78 });
       const band = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.12, 6), white);
       const p1 = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), white);
@@ -349,7 +342,7 @@
       const pocket = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.09, 0.02), new THREE.MeshStandardMaterial({ color: 0xd9d1c2, roughness: 0.95 }));
       pocket.position.set(0, 0.2, 0.24);
       rig.add(apron, pocket);
-    } else if (type === "player") {
+    } else if (type === 'player') {
       const cap = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.12, 0.28), new THREE.MeshStandardMaterial({ color: 0x24324c, roughness: 0.86 }));
       const brim = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.05, 0.18), new THREE.MeshStandardMaterial({ color: palette.accent, roughness: 0.84 }));
       brim.position.set(0, -0.02, 0.16);
@@ -370,8 +363,7 @@
       rig.add(badge);
     }
     rig.add(hat);
-
-    root.userData.rig = { body, head, rig, handL, handR, footL, footR, hat, blinkSeed: hashString(seedText + type), type };
+    root.userData.rig = { body, head, rig, handL, handR, footL, footR, hat, blinkSeed: hashString(seedText + type) };
     return root;
   }
 
@@ -423,18 +415,15 @@
       stackLabel: null,
       capLabel: null,
     };
-
     const root = table.group;
     root.position.set(slot.gx + 0.5, 0, slot.gz + 0.5);
     root.add(makeTableVisual());
-
     const chairA = createChair();
     chairA.position.set(0, 0, 0.68);
     chairA.rotation.y = Math.PI;
     const chairB = createChair();
     chairB.position.set(0, 0, -0.68);
     root.add(chairA, chairB);
-
     const ring = new THREE.Mesh(
       new THREE.TorusGeometry(0.9, 0.06, 8, 24),
       new THREE.MeshStandardMaterial({ color: 0xffd166, emissive: 0x664400, roughness: 0.5 })
@@ -443,19 +432,15 @@
     ring.position.set(0, 0.08, 0);
     ring.visible = false;
     root.add(ring);
-
     const stack = makeStack(12);
     stack.group.position.set(0, 0.82, 0);
     root.add(stack.group);
-
-    const stackLabel = makeLabelSprite("0", "#1f2937", "#fff", 0.9, 0.45);
+    const stackLabel = makeLabelSprite('0', '#1f2937', '#fff', 0.9, 0.45);
     stackLabel.sprite.position.set(0, 1.85, 0);
     root.add(stackLabel.sprite);
-
-    const capLabel = makeLabelSprite("10", "#1f2937", "#fff", 0.9, 0.45);
+    const capLabel = makeLabelSprite('10', '#1f2937', '#fff', 0.9, 0.45);
     capLabel.sprite.position.set(0.55, 1.85, 0.1);
     root.add(capLabel.sprite);
-
     table.stackModel = stack;
     table.ring = ring;
     table.stackLabel = stackLabel;
@@ -471,18 +456,15 @@
     );
     arrow.position.y = 1.05;
     group.add(arrow);
-
     const stem = new THREE.Mesh(
       new THREE.CylinderGeometry(0.06, 0.06, 0.5, 8),
       new THREE.MeshStandardMaterial({ color: 0x2e8c2e, roughness: 0.6 })
     );
     stem.position.y = 0.62;
     group.add(stem);
-
-    const label = makeLabelSprite(`Stůl ${table.cost}`, "#143214", "#dfffe0", 1.9, 0.7);
+    const label = makeLabelSprite(`Stůl ${table.cost}`, '#143214', '#dfffe0', 1.9, 0.7);
     label.sprite.position.y = 1.65;
     group.add(label.sprite);
-
     const ring = new THREE.Mesh(
       new THREE.TorusGeometry(0.5, 0.05, 8, 20),
       new THREE.MeshStandardMaterial({ color: 0x73ef73, emissive: 0x225522, roughness: 0.4 })
@@ -490,38 +472,9 @@
     ring.rotation.x = Math.PI / 2;
     ring.position.y = 0.28;
     group.add(ring);
-
     group.position.set(table.gx + 0.5, 0, table.gz + 0.5);
     group.userData = { table, arrow, label, ring };
     return group;
-  }
-
-  function rebuildBlockedMap() {
-    for (let z = 0; z < GRID_H; z++) for (let x = 0; x < GRID_W; x++) blocked[z][x] = false;
-
-    for (let x = 0; x < GRID_W; x++) {
-      block(x, 0);
-      block(x, GRID_H - 1);
-    }
-    for (let z = 0; z < GRID_H; z++) {
-      block(0, z);
-      block(GRID_W - 1, z);
-    }
-    for (let x = 1; x < GRID_W - 1; x++) if (x !== WORLD.entrance.gx) block(x, 7);
-    for (let z = 1; z < 7; z++) {
-      block(4, z);
-      block(15, z);
-    }
-
-    block(WORLD.stock.gx, WORLD.stock.gz);
-    block(WORLD.oven.gx, WORLD.oven.gz);
-    block(WORLD.counter.gx, WORLD.counter.gz);
-    block(WORLD.cash.gx, WORLD.cash.gz);
-
-    for (const t of tables) {
-      if (!t.active) continue;
-      block(t.gx, t.gz);
-    }
   }
 
   function block(gx, gz) {
@@ -530,6 +483,35 @@
 
   function cellBlocked(gx, gz) {
     return gx < 0 || gz < 0 || gx >= GRID_W || gz >= GRID_H || blocked[gz][gx];
+  }
+
+  function rebuildBlockedMap() {
+    for (let z = 0; z < GRID_H; z++) {
+      for (let x = 0; x < GRID_W; x++) blocked[z][x] = false;
+    }
+    for (let x = 0; x < GRID_W; x++) {
+      block(x, 0);
+      block(x, GRID_H - 1);
+    }
+    for (let z = 0; z < GRID_H; z++) {
+      block(0, z);
+      block(GRID_W - 1, z);
+    }
+    for (let x = 1; x < GRID_W - 1; x++) {
+      if (x !== WORLD.entrance.gx) block(x, 7);
+    }
+    for (let z = 1; z < 7; z++) {
+      block(4, z);
+      block(15, z);
+    }
+    block(WORLD.stock.gx, WORLD.stock.gz);
+    block(WORLD.oven.gx, WORLD.oven.gz);
+    block(WORLD.counter.gx, WORLD.counter.gz);
+    block(WORLD.cash.gx, WORLD.cash.gz);
+    for (const t of tables) {
+      if (!t.active) continue;
+      block(t.gx, t.gz);
+    }
   }
 
   function canOccupy(x, z, radius = 0.30) {
@@ -602,38 +584,31 @@
     scene.add(fill);
 
     const floorTex = makeCanvasTexture((ctx, w, h) => {
-      ctx.fillStyle = "#d6ba83";
+      ctx.fillStyle = '#d6ba83';
       ctx.fillRect(0, 0, w, h);
       const tile = w / 8;
       for (let y = 0; y < 8; y++) {
         for (let x = 0; x < 8; x++) {
-          ctx.fillStyle = (x + y) % 2 === 0 ? "#e5cd9c" : "#d8b779";
+          ctx.fillStyle = (x + y) % 2 === 0 ? '#e5cd9c' : '#d8b779';
           ctx.fillRect(x * tile, y * tile, tile, tile);
-          ctx.fillStyle = "rgba(0,0,0,0.03)";
+          ctx.fillStyle = 'rgba(0,0,0,0.03)';
           ctx.fillRect(x * tile, y * tile, tile, tile);
         }
       }
-      ctx.strokeStyle = "rgba(90,60,35,0.18)";
+      ctx.strokeStyle = 'rgba(90,60,35,0.18)';
       ctx.lineWidth = 4;
       ctx.strokeRect(2, 2, w - 4, h - 4);
     });
     floorTex.repeat.set(2, 2);
 
-    const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(20, 20),
-      new THREE.MeshStandardMaterial({ map: floorTex, roughness: 1 })
-    );
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), new THREE.MeshStandardMaterial({ map: floorTex, roughness: 1 }));
     floor.rotation.x = -Math.PI / 2;
     floor.position.set(10, 0, 10);
     scene.add(floor);
-
     scene.add(new THREE.GridHelper(20, 20, 0x8c6a43, 0xc7b088));
 
     function makeWall(x, z, h) {
-      const wall = new THREE.Mesh(
-        new THREE.BoxGeometry(1, h, 1),
-        new THREE.MeshStandardMaterial({ color: 0x89593f, roughness: 0.98 })
-      );
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(1, h, 1), new THREE.MeshStandardMaterial({ color: 0x89593f, roughness: 0.98 }));
       wall.position.set(x, h / 2, z);
       return wall;
     }
@@ -652,13 +627,10 @@
       scene.add(makeWall(15.5, z + 0.5, 2.2));
     }
 
-    const sign = new THREE.Mesh(
-      new THREE.BoxGeometry(4.8, 0.45, 0.2),
-      new THREE.MeshStandardMaterial({ color: 0x22314a, roughness: 0.6 })
-    );
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.45, 0.2), new THREE.MeshStandardMaterial({ color: 0x22314a, roughness: 0.6 }));
     sign.position.set(10, 2.1, 8.2);
     scene.add(sign);
-    const signLabel = makeLabelSprite("RESTAURANT ZOMBIE", "#111827", "#fff", 2.1, 0.8);
+    const signLabel = makeLabelSprite('RESTAURANT ZOMBIE', '#111827', '#fff', 2.1, 0.8);
     signLabel.sprite.position.set(10, 2.9, 8.3);
     scene.add(signLabel.sprite);
 
@@ -693,21 +665,20 @@
     cashDesk.position.set(WORLD.cash.gx + 0.5, 0.5, WORLD.cash.gz + 0.5);
     scene.add(cashDesk);
 
-    player = makePearCharacter("player", "player-main");
+    player = makePearCharacter('player', 'player-main');
     player.position.set(state.player.x, 0, state.player.z);
     scene.add(player);
-
     carryStack = makeStack(12, 0.25);
     carryStack.group.position.set(0, 1.45, 0.02);
     player.add(carryStack.group);
 
-    chef = makePearCharacter("chef", "chef-main");
+    chef = makePearCharacter('chef', 'chef-main');
     chef.position.set(WORLD.oven.gx + 1.8, 0, WORLD.oven.gz + 1.0);
     chef.scale.setScalar(0.94);
     scene.add(chef);
 
-    for (const slot of BUILD_SPOTS) {
-      const table = buildTable(slot, tables.length < START_ACTIVE_TABLES);
+    for (const spot of BUILD_SPOTS) {
+      const table = buildTable(spot, tables.length < START_ACTIVE_TABLES);
       tables.push(table);
       if (table.active) scene.add(table.group);
       else {
@@ -732,27 +703,29 @@
     ui.stock.textContent = state.stock;
     ui.carry.textContent = `${state.carry}/${state.carryCap}`;
     ui.oven.textContent = Math.max(0, Math.floor(ovenStack.count));
-    ui.waiting.textContent = state.customers.filter(c => c.state === "waiting" || c.state === "paying").length;
+    ui.waiting.textContent = state.customers.filter(c => c.state === 'waiting' || c.state === 'eating' || c.state === 'paying').length;
     ui.rep.textContent = state.rep;
     ui.upgradeCarryBtn.textContent = `Kapacita (${15 * state.carryCap})`;
     ui.upgradeOvenBtn.textContent = `Pec (${20 * state.ovenLevel})`;
     const now = performance.now();
-    ui.actionBtn.textContent = now < state.adCooldownAt ? `${Math.ceil((state.adCooldownAt - now) / 1000)}s` : "E";
+    ui.actionBtn.textContent = now < state.adCooldownAt ? `${Math.ceil((state.adCooldownAt - now) / 1000)}s` : 'E';
   }
 
   function updatePlayer(dt) {
-    let dx = 0, dz = 0;
-    if (state.keys["w"] || state.keys["arrowup"]) dz -= 1;
-    if (state.keys["s"] || state.keys["arrowdown"]) dz += 1;
-    if (state.keys["a"] || state.keys["arrowleft"]) dx -= 1;
-    if (state.keys["d"] || state.keys["arrowright"]) dx += 1;
+    let dx = 0;
+    let dz = 0;
+    if (state.keys['w'] || state.keys['arrowup']) dz -= 1;
+    if (state.keys['s'] || state.keys['arrowdown']) dz += 1;
+    if (state.keys['a'] || state.keys['arrowleft']) dx -= 1;
+    if (state.keys['d'] || state.keys['arrowright']) dx += 1;
     if (state.touch.active) {
       dx += state.touch.dx;
       dz += state.touch.dz;
     }
     const len = Math.hypot(dx, dz);
     if (len > 0.001) {
-      dx /= len; dz /= len;
+      dx /= len;
+      dz /= len;
       const nx = state.player.x + dx * state.player.speed * dt;
       const nz = state.player.z + dz * state.player.speed * dt;
       if (canOccupy(nx, state.player.z)) state.player.x = nx;
@@ -782,13 +755,13 @@
         state.stock -= 1;
         ovenStack.count += 1;
         ovenStack.setCount(ovenStack.count);
-        createPizzaParticle("+pizza", WORLD.oven.gx + 0.5, WORLD.oven.gz + 0.5, "#ffd166");
+        createPizzaParticle('+pizza', WORLD.oven.gx + 0.5, WORLD.oven.gz + 0.5, '#ffd166');
       } else break;
     }
   }
 
   function createPizzaParticle(text, x, z, color) {
-    const p = makeLabelSprite(text, "#111827", color || "#fff", 1.8, 0.8);
+    const p = makeLabelSprite(text, '#111827', color || '#fff', 1.8, 0.8);
     p.sprite.position.set(x, 1.6, z);
     scene.add(p.sprite);
     state.particles.push({ sprite: p.sprite, life: 1, speed: 0.4 });
@@ -799,25 +772,25 @@
     customer.paid = true;
     state.money += customer.reward;
     state.rep += 1;
-    createPizzaParticle("+" + customer.reward, customer.table.gx + 0.5, customer.table.gz + 0.5, "#8fe08f");
+    createPizzaParticle('+' + customer.reward, customer.table.gx + 0.5, customer.table.gz + 0.5, '#8fe08f');
     customer.table.stack = 0;
     customer.table.occupied = false;
     customer.table.customerId = null;
     updateTableVisuals(customer.table);
     rebuildBlockedMap();
-    customer.state = "leaving";
+    customer.state = 'leaving';
     customer.path = findPath(worldToCell(customer.x, customer.z), WORLD.entrance);
     customer.pathIndex = 0;
-    toast("Host zaplatil", `+${customer.reward}`);
+    toast('Host zaplatil', `+${customer.reward}`);
   }
 
   function serveTable(table, customer) {
     if (state.carry <= 0) {
-      toast("Nemáš pizzu");
+      toast('Nemáš pizzu');
       return true;
     }
     if (table.stack >= table.capacity) {
-      toast("Stůl je plný");
+      toast('Stůl je plný');
       return true;
     }
     state.carry -= 1;
@@ -825,11 +798,11 @@
     customer.served += 1;
     carryStack.setCount(state.carry);
     updateTableVisuals(table);
-    createPizzaParticle("-pizza", table.gx + 0.5, table.gz + 0.5, "#ffcf6f");
-    toast("Pizza podána", "Na stůl přibyla další pizza.");
-    if (customer.served >= customer.order && customer.state !== "paying") {
-      customer.state = "paying";
-      customer.payTimer = 1.0;
+    createPizzaParticle('-pizza', table.gx + 0.5, table.gz + 0.5, '#ffcf6f');
+    toast('Pizza podána', 'Na stůl přibyla další pizza.');
+    if (customer.state === 'waiting') {
+      customer.state = 'eating';
+      customer.eatTimer = 0.65;
     }
     return true;
   }
@@ -838,35 +811,35 @@
     if (state.money >= 5) {
       state.money -= 5;
       state.stock += 5;
-      createPizzaParticle("+5", WORLD.stock.gx + 0.5, WORLD.stock.gz + 0.5, "#8fe08f");
-      toast("Suroviny koupeny");
+      createPizzaParticle('+5', WORLD.stock.gx + 0.5, WORLD.stock.gz + 0.5, '#8fe08f');
+      toast('Suroviny koupeny');
       return;
     }
     const now = performance.now();
     if (now >= state.emergencyAt) {
       state.stock += 3;
       state.emergencyAt = now + 30000;
-      createPizzaParticle("+3", WORLD.stock.gx + 0.5, WORLD.stock.gz + 0.5, "#8fe08f");
-      toast("Nouzové suroviny", "Dostals 3 zdarma, aby se hra nezasekla.");
+      createPizzaParticle('+3', WORLD.stock.gx + 0.5, WORLD.stock.gz + 0.5, '#8fe08f');
+      toast('Nouzové suroviny', 'Dostals 3 zdarma, aby se hra nezasekla.');
       return;
     }
-    toast("Málo peněz", "Počkej na nouzové doplnění nebo reklamu.");
+    toast('Málo peněz', 'Počkej na nouzové doplnění nebo reklamu.');
   }
 
   function upgradeCarry() {
     const cost = 15 * state.carryCap;
-    if (state.money < cost) return toast("Málo peněz", `Potřebuješ ${cost}.`);
+    if (state.money < cost) return toast('Málo peněz', `Potřebuješ ${cost}.`);
     state.money -= cost;
     state.carryCap += 2;
-    toast("Kapacita zvýšena", "Uneseš více pizz.");
+    toast('Kapacita zvýšena', 'Uneseš více pizz.');
   }
 
   function upgradeOven() {
     const cost = 20 * state.ovenLevel;
-    if (state.money < cost) return toast("Málo peněz", `Potřebuješ ${cost}.`);
+    if (state.money < cost) return toast('Málo peněz', `Potřebuješ ${cost}.`);
     state.money -= cost;
     state.ovenLevel += 1;
-    toast("Pec vylepšena", "Pec bude rychlejší.");
+    toast('Pec vylepšena', 'Pec bude rychlejší.');
   }
 
   function nearestTable() {
@@ -876,7 +849,10 @@
       if (!t.active) continue;
       const c = cellCenter(t.gx, t.gz);
       const d = dist(state.player.x, state.player.z, c.x, c.z);
-      if (d < bestD) { bestD = d; best = t; }
+      if (d < bestD) {
+        bestD = d;
+        best = t;
+      }
     }
     return best;
   }
@@ -888,7 +864,10 @@
       if (!marker.visible) continue;
       const p = marker.position;
       const d = dist(state.player.x, state.player.z, p.x, p.z);
-      if (d < bestD) { bestD = d; best = marker; }
+      if (d < bestD) {
+        bestD = d;
+        best = marker;
+      }
     }
     return best;
   }
@@ -897,7 +876,7 @@
     const table = marker.userData.table;
     if (table.active) return;
     if (state.money < table.cost) {
-      toast("Málo peněz", `Potřebuješ ${table.cost}.`);
+      toast('Málo peněz', `Potřebuješ ${table.cost}.`);
       return;
     }
     state.money -= table.cost;
@@ -905,7 +884,23 @@
     scene.add(table.group);
     marker.visible = false;
     rebuildBlockedMap();
-    toast("Stůl postaven", `Za ${table.cost}.`);
+    toast('Stůl postaven', `Za ${table.cost}.`);
+  }
+
+  function collectFromOven() {
+    if (dist(state.player.x, state.player.z, WORLD.oven.gx + 0.5, WORLD.oven.gz + 0.5) > 1.25) return false;
+    const take = Math.min(ovenStack.count, state.carryCap - state.carry);
+    if (take <= 0) {
+      toast(ovenStack.count === 0 ? 'V peci nic není' : 'Máš plnou kapacitu');
+      return true;
+    }
+    ovenStack.count -= take;
+    state.carry += take;
+    ovenStack.setCount(ovenStack.count);
+    carryStack.setCount(state.carry);
+    createPizzaParticle('+' + take, WORLD.oven.gx + 0.5, WORLD.oven.gz + 0.5, '#ffd166');
+    toast('Pizza naložena', `Vzato ${take}.`);
+    return true;
   }
 
   function interact() {
@@ -926,47 +921,31 @@
     if (dist(state.player.x, state.player.z, WORLD.stock.gx + 0.5, WORLD.stock.gz + 0.5) < 1.25) return buyStock();
     if (dist(state.player.x, state.player.z, WORLD.counter.gx + 0.5, WORLD.counter.gz + 0.5) < 1.25) return upgradeCarry();
     if (dist(state.player.x, state.player.z, WORLD.cash.gx + 0.5, WORLD.cash.gz + 0.5) < 1.25) return upgradeOven();
-    toast("Nic k akci", "Přibliž se ke stolu, stavbě, peci nebo skladu.");
-  }
-
-  function collectFromOven() {
-    if (dist(state.player.x, state.player.z, WORLD.oven.gx + 0.5, WORLD.oven.gz + 0.5) > 1.25) return false;
-    const take = Math.min(ovenStack.count, state.carryCap - state.carry);
-    if (take <= 0) {
-      toast(ovenStack.count === 0 ? "V peci nic není" : "Máš plnou kapacitu");
-      return true;
-    }
-    ovenStack.count -= take;
-    state.carry += take;
-    ovenStack.setCount(ovenStack.count);
-    carryStack.setCount(state.carry);
-    createPizzaParticle("+" + take, WORLD.oven.gx + 0.5, WORLD.oven.gz + 0.5, "#ffd166");
-    toast("Pizza naložena", `Vzato ${take}.`);
-    return true;
+    toast('Nic k akci', 'Přibliž se ke stolu, stavbě, peci nebo skladu.');
   }
 
   function spawnCustomer(manual = false) {
     const table = tables.find(t => t.active && !t.occupied);
     if (!table) {
-      if (manual) toast("Žádný volný stůl", "Nejdřív postav nový stůl.");
-      return;
+      if (manual) toast('Žádný volný stůl', 'Nejdřív postav nový stůl.');
+      return false;
     }
-    const idSeed = "cust-" + Math.random().toString(36).slice(2);
-    const customer = makePearCharacter("customer", idSeed);
+    const idSeed = 'cust-' + Math.random().toString(36).slice(2);
+    const customer = makePearCharacter('customer', idSeed);
     customer.scale.setScalar(0.98);
     customer.position.set(WORLD.entrance.gx + 0.5, 0, WORLD.entrance.gz + 0.5);
     scene.add(customer);
     const reward = 15 + Math.floor(Math.random() * 8);
-    const order = 2 + Math.floor(Math.random() * 3);
     const c = {
       id: idSeed,
       table,
       x: WORLD.entrance.gx + 0.5,
       z: WORLD.entrance.gz + 0.5,
-      state: "walking",
+      state: 'walking',
       waitTimer: 18 + Math.random() * 10,
+      eatTimer: 0,
       payTimer: 0,
-      order,
+      order: 1,
       served: 0,
       reward,
       path: [],
@@ -982,14 +961,15 @@
     rebuildBlockedMap();
     c.path = findPath(worldToCell(c.x, c.z), table.seat);
     state.customers.push(c);
-    toast("Host přišel", manual ? "Přivolán ke stolu." : "Míří ke stolu.");
+    if (manual) toast('Host přišel', 'Přivolán ke stolu.');
+    return true;
   }
 
-  function animateCharacter(root, c, dt) {
+  function animateCharacter(root, c) {
     const r = root.userData.rig;
     if (!r) return;
     const t = performance.now();
-    const speedFactor = c.state === "walking" ? 0.55 : c.state === "leaving" ? 0.3 : 0.12;
+    const speedFactor = c.state === 'walking' ? 0.55 : c.state === 'leaving' ? 0.3 : 0.12;
     const walk = Math.sin(t * 0.012 + r.blinkSeed * 0.0001 + root.position.x * 0.2 + root.position.z * 0.17);
     const swing = walk * (0.12 + speedFactor * 0.34);
     const bob = Math.sin(t * 0.006 + r.blinkSeed * 0.0002) * (0.008 + speedFactor * 0.015);
@@ -1006,8 +986,8 @@
   }
 
   function updateCustomer(c, dt) {
-    if (c.state === "walking" || c.state === "leaving") {
-      if (!c.path.length) c.path = findPath(worldToCell(c.x, c.z), c.state === "walking" ? c.table.seat : WORLD.entrance);
+    if (c.state === 'walking' || c.state === 'leaving') {
+      if (!c.path.length) c.path = findPath(worldToCell(c.x, c.z), c.state === 'walking' ? c.table.seat : WORLD.entrance);
       const node = c.path[c.pathIndex];
       if (node) {
         const target = cellCenter(node.gx, node.gz);
@@ -1016,26 +996,26 @@
         const d = Math.hypot(dx, dz);
         if (d < 0.05) {
           if (c.pathIndex < c.path.length - 1) c.pathIndex += 1;
-          else if (c.state === "walking") {
-            c.state = "waiting";
+          else if (c.state === 'walking') {
+            c.state = 'waiting';
             c.waitTimer = 18 + Math.random() * 10;
-            toast("Host sedí", `Objednal ${c.order} pizz.`);
+            toast('Host sedí', 'Objednal 1 pizzu.');
           } else {
             c.dead = true;
             scene.remove(c.mesh);
           }
         } else {
-          const speed = c.state === "walking" ? 1.9 : 2.2;
+          const speed = c.state === 'walking' ? 1.9 : 2.2;
           c.x += (dx / d) * speed * dt;
           c.z += (dz / d) * speed * dt;
           c.mesh.position.set(c.x, 0, c.z);
           c.mesh.rotation.y = Math.atan2(dx, dz);
         }
       }
-    } else if (c.state === "waiting") {
+    } else if (c.state === 'waiting') {
       c.waitTimer -= dt;
       if (c.waitTimer <= 0) {
-        c.state = "leaving";
+        c.state = 'leaving';
         c.path = findPath(worldToCell(c.x, c.z), WORLD.entrance);
         c.pathIndex = 0;
         state.rep = Math.max(0, state.rep - 1);
@@ -1044,14 +1024,29 @@
         c.table.stack = 0;
         updateTableVisuals(c.table);
         rebuildBlockedMap();
-        toast("Host odchází", "Příliš dlouhé čekání.");
+        toast('Host odchází', 'Příliš dlouhé čekání.');
       }
-    } else if (c.state === "paying") {
-      c.payTimer -= dt;
-      if (c.payTimer <= 0) payAndLeave(c);
+    } else if (c.state === 'eating') {
+      c.eatTimer -= dt;
+      if (c.eatTimer <= 0) {
+        if (c.table.stack > 0) {
+          c.table.stack -= 1;
+          c.served += 1;
+          c.eaten += 1;
+          updateTableVisuals(c.table);
+          createPizzaParticle('-pizza', c.table.gx + 0.5, c.table.gz + 0.5, '#ffcf6f');
+        }
+        if (c.eaten >= c.order) {
+          payAndLeave(c);
+          return;
+        }
+        c.state = 'waiting';
+      }
+    } else if (c.state === 'paying') {
+      payAndLeave(c);
     }
     c.mesh.position.set(c.x, 0, c.z);
-    animateCharacter(c.mesh, c, dt);
+    animateCharacter(c.mesh, c);
   }
 
   function updateParticles(dt) {
@@ -1107,36 +1102,40 @@
     camera.lookAt(px, 0.95, pz);
   }
 
+  function hasFreeTable() {
+    return tables.some(t => t.active && !t.occupied);
+  }
+
   function makeRewardButton() {
-    const btn = document.createElement("button");
-    btn.id = "adRewardBtn";
-    btn.className = "secondary";
-    btn.style.marginLeft = "8px";
-    btn.textContent = "Reklama +5";
-    btn.addEventListener("click", () => {
+    const btn = document.createElement('button');
+    btn.id = 'adRewardBtn';
+    btn.className = 'secondary';
+    btn.style.marginLeft = '8px';
+    btn.textContent = 'Reklama +5';
+    btn.addEventListener('click', () => {
       const now = performance.now();
       if (now < state.adCooldownAt) {
-        toast("Reklama ještě není připravená", `${Math.ceil((state.adCooldownAt - now) / 1000)} s`);
+        toast('Reklama ještě není připravená', `${Math.ceil((state.adCooldownAt - now) / 1000)} s`);
         return;
       }
       state.money += 5;
       state.adCooldownAt = now + 30000;
-      toast("Odměna za reklamu", "+5 peněz");
+      toast('Odměna za reklamu', '+5 peněz');
     });
     return btn;
   }
 
   const adBtn = makeRewardButton();
-  document.querySelector(".top-actions")?.appendChild(adBtn);
+  document.querySelector('.top-actions')?.appendChild(adBtn);
 
   function addButtons() {
-    ui.spawnBtn.addEventListener("click", () => spawnCustomer(true));
-    ui.buyStockBtn.addEventListener("click", buyStock);
-    ui.upgradeCarryBtn.addEventListener("click", upgradeCarry);
-    ui.upgradeOvenBtn.addEventListener("click", upgradeOven);
-    ui.saveBtn.addEventListener("click", save);
-    ui.resetBtn.addEventListener("click", reset);
-    ui.actionBtn.addEventListener("click", interact);
+    ui.spawnBtn.addEventListener('click', () => spawnCustomer(true));
+    ui.buyStockBtn.addEventListener('click', buyStock);
+    ui.upgradeCarryBtn.addEventListener('click', upgradeCarry);
+    ui.upgradeOvenBtn.addEventListener('click', upgradeOven);
+    ui.saveBtn.addEventListener('click', save);
+    ui.resetBtn.addEventListener('click', reset);
+    ui.actionBtn.addEventListener('click', interact);
   }
 
   function save() {
@@ -1152,7 +1151,7 @@
       tables: tables.map(t => ({ active: t.active, capacity: t.capacity, stack: t.stack, upgradeLevel: t.upgradeLevel })),
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
-    toast("Uloženo");
+    toast('Uloženo');
   }
 
   function load() {
@@ -1160,26 +1159,26 @@
       const raw = localStorage.getItem(SAVE_KEY);
       if (!raw) return;
       const data = JSON.parse(raw);
-      if (typeof data.money === "number") state.money = data.money;
-      if (typeof data.stock === "number") state.stock = data.stock;
-      if (typeof data.carry === "number") state.carry = data.carry;
-      if (typeof data.carryCap === "number") state.carryCap = data.carryCap;
-      if (typeof data.rep === "number") state.rep = data.rep;
-      if (typeof data.ovenLevel === "number") state.ovenLevel = data.ovenLevel;
+      if (typeof data.money === 'number') state.money = data.money;
+      if (typeof data.stock === 'number') state.stock = data.stock;
+      if (typeof data.carry === 'number') state.carry = data.carry;
+      if (typeof data.carryCap === 'number') state.carryCap = data.carryCap;
+      if (typeof data.rep === 'number') state.rep = data.rep;
+      if (typeof data.ovenLevel === 'number') state.ovenLevel = data.ovenLevel;
       if (data.player) {
-        if (typeof data.player.x === "number") state.player.x = data.player.x;
-        if (typeof data.player.z === "number") state.player.z = data.player.z;
-        if (typeof data.player.angle === "number") state.player.angle = data.player.angle;
+        if (typeof data.player.x === 'number') state.player.x = data.player.x;
+        if (typeof data.player.z === 'number') state.player.z = data.player.z;
+        if (typeof data.player.angle === 'number') state.player.angle = data.player.angle;
       }
-      if (data.oven && typeof data.oven.stack === "number") ovenStack.count = data.oven.stack;
-      if (data.oven && typeof data.oven.timer === "number") state.ovenTimer = data.oven.timer;
+      if (data.oven && typeof data.oven.stack === 'number') ovenStack.count = data.oven.stack;
+      if (data.oven && typeof data.oven.timer === 'number') state.ovenTimer = data.oven.timer;
       if (Array.isArray(data.tables)) {
         data.tables.forEach((src, i) => {
           if (!tables[i]) return;
           tables[i].active = !!src.active;
-          tables[i].capacity = typeof src.capacity === "number" ? src.capacity : tables[i].capacity;
-          tables[i].stack = typeof src.stack === "number" ? src.stack : tables[i].stack;
-          tables[i].upgradeLevel = typeof src.upgradeLevel === "number" ? src.upgradeLevel : tables[i].upgradeLevel;
+          tables[i].capacity = typeof src.capacity === 'number' ? src.capacity : tables[i].capacity;
+          tables[i].stack = typeof src.stack === 'number' ? src.stack : tables[i].stack;
+          tables[i].upgradeLevel = typeof src.upgradeLevel === 'number' ? src.upgradeLevel : tables[i].upgradeLevel;
           if (tables[i].active) {
             scene.add(tables[i].group);
             const marker = buildMarkers[i];
@@ -1226,23 +1225,23 @@
     ovenStack.setCount(0);
     carryStack.setCount(0);
     rebuildBlockedMap();
-    toast("Reset hotov");
+    toast('Reset hotov');
   }
 
   function setupJoystick() {
-    ui.stick.style.position = "fixed";
-    ui.stick.style.left = "0px";
-    ui.stick.style.top = "0px";
-    ui.stick.style.transform = "translate(-9999px,-9999px)";
-    ui.stick.style.opacity = "0";
-    ui.stick.style.pointerEvents = "none";
-    ui.stick.style.zIndex = "70";
-    ui.nub.style.transform = "translate(-50%, -50%)";
-    ui.nub.style.pointerEvents = "none";
+    ui.stick.style.position = 'fixed';
+    ui.stick.style.left = '0px';
+    ui.stick.style.top = '0px';
+    ui.stick.style.transform = 'translate(-9999px,-9999px)';
+    ui.stick.style.opacity = '0';
+    ui.stick.style.pointerEvents = 'none';
+    ui.stick.style.zIndex = '70';
+    ui.nub.style.transform = 'translate(-50%, -50%)';
+    ui.nub.style.pointerEvents = 'none';
 
-    window.addEventListener("pointerdown", (e) => {
-      if (e.pointerType !== "touch") return;
-      if (e.target && typeof e.target.closest === "function" && e.target.closest(".hud, .top-actions, .footer, button")) return;
+    window.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'touch') return;
+      if (e.target && typeof e.target.closest === 'function' && e.target.closest('.hud, .top-actions, .footer, button')) return;
       if (e.clientX > window.innerWidth * 0.58) return;
       state.touch.active = true;
       state.touch.id = e.pointerId;
@@ -1250,13 +1249,13 @@
       state.touch.cy = e.clientY;
       ui.stick.style.left = `${e.clientX}px`;
       ui.stick.style.top = `${e.clientY}px`;
-      ui.stick.style.transform = "translate(-50%, -50%)";
-      ui.stick.style.opacity = "1";
+      ui.stick.style.transform = 'translate(-50%, -50%)';
+      ui.stick.style.opacity = '1';
       setStick(0, 0);
       e.preventDefault();
     }, { passive: false });
 
-    window.addEventListener("pointermove", (e) => {
+    window.addEventListener('pointermove', (e) => {
       if (!state.touch.active || e.pointerId !== state.touch.id) return;
       setStick(e.clientX - state.touch.cx, e.clientY - state.touch.cy);
       e.preventDefault();
@@ -1267,8 +1266,8 @@
       hideStick();
       e.preventDefault();
     };
-    window.addEventListener("pointerup", end, { passive: false });
-    window.addEventListener("pointercancel", end, { passive: false });
+    window.addEventListener('pointerup', end, { passive: false });
+    window.addEventListener('pointercancel', end, { passive: false });
   }
 
   function setStick(dx, dz) {
@@ -1288,14 +1287,14 @@
     state.touch.id = null;
     state.touch.dx = 0;
     state.touch.dz = 0;
-    ui.stick.style.opacity = "0";
-    ui.stick.style.transform = "translate(-9999px,-9999px)";
-    ui.nub.style.transform = "translate(-50%, -50%)";
+    ui.stick.style.opacity = '0';
+    ui.stick.style.transform = 'translate(-9999px,-9999px)';
+    ui.nub.style.transform = 'translate(-50%, -50%)';
   }
 
   function onKeyDown(e) {
     state.keys[e.key.toLowerCase()] = true;
-    if (e.key.toLowerCase() === "e" || e.key === " ") {
+    if (e.key.toLowerCase() === 'e' || e.key === ' ') {
       e.preventDefault();
       interact();
     }
@@ -1314,20 +1313,24 @@
     updateOven(dt);
 
     state.lastSpawn += dt;
-    if (state.lastSpawn > 8.5 && state.customers.filter(c => !c.dead).length < 4) {
-      spawnCustomer(false);
-      state.lastSpawn = 0;
+    if (state.lastSpawn > 8.5) {
+      if (hasFreeTable()) {
+        if (spawnCustomer(false)) state.lastSpawn = 0;
+      } else {
+        state.lastSpawn = 7.5;
+      }
     }
 
     for (const c of state.customers) updateCustomer(c, dt);
-    for (let i = state.customers.length - 1; i >= 0; i--) if (state.customers[i].dead) state.customers.splice(i, 1);
+    for (let i = state.customers.length - 1; i >= 0; i--) {
+      if (state.customers[i].dead) state.customers.splice(i, 1);
+    }
 
     updateParticles(dt);
     updateTables();
     updateBuildMarkers();
     updateHud();
     updateCamera(dt);
-
     renderer.render(scene, camera);
     requestAnimationFrame(updateLoop);
   }
@@ -1342,10 +1345,10 @@
     player.position.set(state.player.x, 0, state.player.z);
     ovenStack.setCount(ovenStack.count);
     carryStack.setCount(state.carry);
-    toast("Engine ready", "Dva stoly na startu, build spoty a funkční placení.");
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keyup", onKeyUp);
-    window.addEventListener("resize", () => {
+    toast('Engine ready', 'Dva stoly na startu, build spoty a okamžité placení.');
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('resize', () => {
       renderer.setSize(window.innerWidth, window.innerHeight, false);
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
