@@ -19,7 +19,7 @@
     nub: document.getElementById('nub'),
   };
 
-  const SAVE_KEY = 'restaurant-zombie-v9';
+  const SAVE_KEY = 'restaurant-zombie-v11';
   const GRID_W = 20;
   const GRID_H = 20;
   const START_ACTIVE_TABLES = 2;
@@ -947,6 +947,7 @@
       payTimer: 0,
       order: 1,
       served: 0,
+      eaten: 0,
       reward,
       path: [],
       pathIndex: 0,
