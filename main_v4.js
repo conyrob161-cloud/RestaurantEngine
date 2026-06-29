@@ -19,7 +19,7 @@
     nub: document.getElementById('nub'),
   };
 
-  const SAVE_KEY = 'restaurant-zombie-v11';
+  const SAVE_KEY = 'restaurant-zombie-v12';
   const GRID_W = 20;
   const GRID_H = 20;
   const START_ACTIVE_TABLES = 2;
@@ -60,13 +60,7 @@
   const blocked = Array.from({ length: GRID_H }, () => Array(GRID_W).fill(false));
   const tables = [];
   const buildMarkers = [];
-  let renderer;
-  let scene;
-  let camera;
-  let player;
-  let chef;
-  let carryStack;
-  let ovenStack;
+  let renderer, scene, camera, player, chef, carryStack, ovenStack;
 
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const dist = (ax, az, bx, bz) => Math.hypot(ax - bx, az - bz);
@@ -211,8 +205,8 @@
     const ctx = c.getContext('2d');
     ctx.fillStyle = `#${skin.toString(16).padStart(6, '0')}`;
     ctx.fillRect(0, 0, 256, 256);
-    const variant = seed % 4;
     ctx.fillStyle = `#${hair.toString(16).padStart(6, '0')}`;
+    const variant = seed % 4;
     ctx.beginPath();
     ctx.ellipse(128, 92, 95, 92, 0, Math.PI, 0);
     ctx.fill();
@@ -237,14 +231,8 @@
     ctx.beginPath(); ctx.arc(72, 150, 16, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(184, 150, 16, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = 'rgba(175,120,100,0.95)';
-    if (typeof ctx.roundRect === 'function') {
-      ctx.beginPath();
-      ctx.roundRect(121, 136, 14, 26, 7);
-      ctx.fill();
-    } else {
-      roundedRectPath(ctx, 121, 136, 14, 26, 7);
-      ctx.fill();
-    }
+    roundedRectPath(ctx, 121, 136, 14, 26, 7);
+    ctx.fill();
     ctx.strokeStyle = '#6b2b2b';
     ctx.lineWidth = 8;
     ctx.lineCap = 'round';
@@ -276,15 +264,18 @@
     body.position.y = 0.78;
     rig.add(body);
 
-    const head = new THREE.Group();
     const headMat = new THREE.MeshStandardMaterial({ color: palette.skin, map: makeFaceTexture(hashString(seedText), palette.skin, palette.hair), roughness: 0.95 });
-    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 8), headMat);
-    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.34, 10, 8), new THREE.MeshStandardMaterial({ color: palette.hair, roughness: 0.95 }));
-    hair.scale.set(1.0, 0.72, 0.92);
-    hair.position.set(0, 0.04, -0.02);
-    head.add(skull, hair);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 8), headMat);
     head.position.y = 1.78;
     rig.add(head);
+
+    const hair = new THREE.Mesh(
+      new THREE.SphereGeometry(0.34, 10, 8),
+      new THREE.MeshStandardMaterial({ color: palette.hair, roughness: 0.95 })
+    );
+    hair.scale.set(1.0, 0.72, 0.92);
+    hair.position.set(0, 1.82, -0.02);
+    rig.add(hair);
 
     function makeHand(side) {
       const g = new THREE.Group();
@@ -363,6 +354,7 @@
       rig.add(badge);
     }
     rig.add(hat);
+
     root.userData.rig = { body, head, rig, handL, handR, footL, footR, hat, blinkSeed: hashString(seedText + type) };
     return root;
   }
@@ -415,15 +407,18 @@
       stackLabel: null,
       capLabel: null,
     };
+
     const root = table.group;
     root.position.set(slot.gx + 0.5, 0, slot.gz + 0.5);
     root.add(makeTableVisual());
+
     const chairA = createChair();
     chairA.position.set(0, 0, 0.68);
     chairA.rotation.y = Math.PI;
     const chairB = createChair();
     chairB.position.set(0, 0, -0.68);
     root.add(chairA, chairB);
+
     const ring = new THREE.Mesh(
       new THREE.TorusGeometry(0.9, 0.06, 8, 24),
       new THREE.MeshStandardMaterial({ color: 0xffd166, emissive: 0x664400, roughness: 0.5 })
@@ -432,15 +427,19 @@
     ring.position.set(0, 0.08, 0);
     ring.visible = false;
     root.add(ring);
+
     const stack = makeStack(12);
     stack.group.position.set(0, 0.82, 0);
     root.add(stack.group);
+
     const stackLabel = makeLabelSprite('0', '#1f2937', '#fff', 0.9, 0.45);
     stackLabel.sprite.position.set(0, 1.85, 0);
     root.add(stackLabel.sprite);
+
     const capLabel = makeLabelSprite('10', '#1f2937', '#fff', 0.9, 0.45);
     capLabel.sprite.position.set(0.55, 1.85, 0.1);
     root.add(capLabel.sprite);
+
     table.stackModel = stack;
     table.ring = ring;
     table.stackLabel = stackLabel;
@@ -456,15 +455,18 @@
     );
     arrow.position.y = 1.05;
     group.add(arrow);
+
     const stem = new THREE.Mesh(
       new THREE.CylinderGeometry(0.06, 0.06, 0.5, 8),
       new THREE.MeshStandardMaterial({ color: 0x2e8c2e, roughness: 0.6 })
     );
     stem.position.y = 0.62;
     group.add(stem);
+
     const label = makeLabelSprite(`Stůl ${table.cost}`, '#143214', '#dfffe0', 1.9, 0.7);
     label.sprite.position.y = 1.65;
     group.add(label.sprite);
+
     const ring = new THREE.Mesh(
       new THREE.TorusGeometry(0.5, 0.05, 8, 20),
       new THREE.MeshStandardMaterial({ color: 0x73ef73, emissive: 0x225522, roughness: 0.4 })
@@ -472,6 +474,7 @@
     ring.rotation.x = Math.PI / 2;
     ring.position.y = 0.28;
     group.add(ring);
+
     group.position.set(table.gx + 0.5, 0, table.gz + 0.5);
     group.userData = { table, arrow, label, ring };
     return group;
@@ -483,6 +486,18 @@
 
   function cellBlocked(gx, gz) {
     return gx < 0 || gz < 0 || gx >= GRID_W || gz >= GRID_H || blocked[gz][gx];
+  }
+
+  function canOccupy(x, z, radius = 0.30) {
+    const points = [
+      [0, 0], [radius, 0], [-radius, 0], [0, radius], [0, -radius],
+      [radius, radius], [radius, -radius], [-radius, radius], [-radius, -radius],
+    ];
+    for (const [dx, dz] of points) {
+      const c = worldToCell(x + dx, z + dz);
+      if (cellBlocked(c.gx, c.gz)) return false;
+    }
+    return true;
   }
 
   function rebuildBlockedMap() {
@@ -497,9 +512,7 @@
       block(0, z);
       block(GRID_W - 1, z);
     }
-    for (let x = 1; x < GRID_W - 1; x++) {
-      if (x !== WORLD.entrance.gx) block(x, 7);
-    }
+    for (let x = 1; x < GRID_W - 1; x++) if (x !== WORLD.entrance.gx) block(x, 7);
     for (let z = 1; z < 7; z++) {
       block(4, z);
       block(15, z);
@@ -512,18 +525,6 @@
       if (!t.active) continue;
       block(t.gx, t.gz);
     }
-  }
-
-  function canOccupy(x, z, radius = 0.30) {
-    const points = [
-      [0, 0], [radius, 0], [-radius, 0], [0, radius], [0, -radius],
-      [radius, radius], [radius, -radius], [-radius, radius], [-radius, -radius],
-    ];
-    for (const [dx, dz] of points) {
-      const c = worldToCell(x + dx, z + dz);
-      if (cellBlocked(c.gx, c.gz)) return false;
-    }
-    return true;
   }
 
   function findPath(start, goal) {
@@ -557,6 +558,159 @@
       }
     }
     return [];
+  }
+
+  function tryFindSafeSpotAround(x, z) {
+    const offsets = [
+      [1.25, 0], [-1.25, 0], [0, 1.25], [0, -1.25],
+      [0.9, 0.9], [0.9, -0.9], [-0.9, 0.9], [-0.9, -0.9],
+      [1.6, 0], [-1.6, 0], [0, 1.6], [0, -1.6],
+    ];
+    for (const [dx, dz] of offsets) {
+      const nx = x + dx;
+      const nz = z + dz;
+      if (canOccupy(nx, nz)) return { x: nx, z: nz };
+    }
+    if (canOccupy(WORLD.entrance.gx + 0.5, WORLD.entrance.gz + 0.5)) {
+      return { x: WORLD.entrance.gx + 0.5, z: WORLD.entrance.gz + 0.5 };
+    }
+    return null;
+  }
+
+  function makePearCharacter(type, seedText) {
+    const palette = paletteFor(type, seedText);
+    const root = new THREE.Group();
+    root.userData.characterType = type;
+    root.userData.seed = seedText;
+    root.add(createShadow(0.18, 0.4));
+
+    const rig = new THREE.Group();
+    rig.position.y = 0.15;
+    root.add(rig);
+
+    const body = new THREE.Mesh(
+      new THREE.SphereGeometry(0.36, 10, 8),
+      new THREE.MeshStandardMaterial({ color: palette.body, roughness: 0.92 })
+    );
+    body.scale.set(0.82, 1.08, 0.72);
+    body.position.y = 0.78;
+    rig.add(body);
+
+    const headMat = new THREE.MeshStandardMaterial({ color: palette.skin, map: makeFaceTexture(hashString(seedText), palette.skin, palette.hair), roughness: 0.95 });
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 8), headMat);
+    head.position.y = 1.78;
+    rig.add(head);
+
+    const hair = new THREE.Mesh(
+      new THREE.SphereGeometry(0.34, 10, 8),
+      new THREE.MeshStandardMaterial({ color: palette.hair, roughness: 0.95 })
+    );
+    hair.scale.set(1.0, 0.72, 0.92);
+    hair.position.set(0, 1.82, -0.02);
+    rig.add(hair);
+
+    function makeHand(side) {
+      const g = new THREE.Group();
+      const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.14, 6), new THREE.MeshStandardMaterial({ color: palette.body, roughness: 0.94 }));
+      cuff.rotation.z = Math.PI / 2;
+      cuff.position.x = side * -0.05;
+      const palmMat = new THREE.MeshStandardMaterial({ color: palette.skin, roughness: 0.96 });
+      const palm = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), palmMat);
+      const finger1 = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 6), palmMat);
+      const finger2 = finger1.clone();
+      const finger3 = finger1.clone();
+      palm.position.x = 0.1;
+      finger1.position.set(0.16, 0.035, 0.03);
+      finger2.position.set(0.16, 0.0, 0.0);
+      finger3.position.set(0.16, -0.035, -0.03);
+      g.add(cuff, palm, finger1, finger2, finger3);
+      g.position.set(side * 0.58, 1.04, 0);
+      g.rotation.z = side * 0.1;
+      return g;
+    }
+
+    function makeFoot(side) {
+      const g = new THREE.Group();
+      const shoeMat = new THREE.MeshStandardMaterial({ color: type === 'chef' ? 0x1f1f1f : 0x1d2230, roughness: 1 });
+      const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.1, 0.34), shoeMat);
+      const toe = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), shoeMat);
+      shoe.position.y = 0.02;
+      toe.position.set(0.09, 0.02, 0.13);
+      g.add(shoe, toe);
+      g.position.set(side * 0.17, 0.08, 0.02);
+      return g;
+    }
+
+    const handL = makeHand(-1);
+    const handR = makeHand(1);
+    const footL = makeFoot(-1);
+    const footR = makeFoot(1);
+    rig.add(handL, handR, footL, footR);
+
+    const hat = new THREE.Group();
+    if (type === 'chef') {
+      const white = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.78 });
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.12, 6), white);
+      const p1 = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), white);
+      const p2 = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), white);
+      const p3 = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), white);
+      p1.position.set(-0.08, 0.2, 0);
+      p2.position.set(0, 0.34, 0.02);
+      p3.position.set(0.09, 0.2, 0);
+      band.position.y = -0.02;
+      hat.add(band, p1, p2, p3);
+      hat.position.y = 2.18;
+      const apron = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.48, 0.07), new THREE.MeshStandardMaterial({ color: 0xf2efe6, roughness: 0.95 }));
+      apron.position.set(0, 0.28, 0.2);
+      const pocket = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.09, 0.02), new THREE.MeshStandardMaterial({ color: 0xd9d1c2, roughness: 0.95 }));
+      pocket.position.set(0, 0.2, 0.24);
+      rig.add(apron, pocket);
+    } else if (type === 'player') {
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.12, 0.28), new THREE.MeshStandardMaterial({ color: 0x24324c, roughness: 0.86 }));
+      const brim = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.05, 0.18), new THREE.MeshStandardMaterial({ color: palette.accent, roughness: 0.84 }));
+      brim.position.set(0, -0.02, 0.16);
+      cap.position.y = 0.06;
+      hat.add(cap, brim);
+      hat.position.y = 2.02;
+      const backpack = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.34, 0.14), new THREE.MeshStandardMaterial({ color: 0x2b4672, roughness: 0.92 }));
+      backpack.position.set(0, 0.42, -0.23);
+      rig.add(backpack);
+    } else {
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.23, 0.14, 6), new THREE.MeshStandardMaterial({ color: palette.accent, roughness: 0.82 }));
+      const top = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), new THREE.MeshStandardMaterial({ color: palette.accent, roughness: 0.82 }));
+      top.position.y = 0.13;
+      hat.add(cap, top);
+      hat.position.y = 1.98;
+      const badge = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.14, 0.03), new THREE.MeshStandardMaterial({ color: palette.accent, roughness: 0.95 }));
+      badge.position.set(0.06, 0.48, 0.28);
+      rig.add(badge);
+    }
+    rig.add(hat);
+
+    root.userData.rig = { body, head, rig, handL, handR, footL, footR, hat, blinkSeed: hashString(seedText + type) };
+    return root;
+  }
+
+  function updateCharacterAnimation(root, stateName) {
+    const rig = root.userData.rig;
+    if (!rig) return;
+    const t = performance.now();
+    const moving = stateName === 'walking' || stateName === 'leaving';
+    const speedFactor = moving ? (stateName === 'walking' ? 1 : 1.15) : 0.25;
+    const walk = Math.sin(t * 0.012 + rig.blinkSeed * 0.0001 + root.position.x * 0.2 + root.position.z * 0.17);
+    const swing = walk * (0.12 + speedFactor * 0.34);
+    const bob = Math.sin(t * 0.006 + rig.blinkSeed * 0.0002) * (0.008 + speedFactor * 0.015);
+    rig.body.position.y = 0.78 + bob * 0.25;
+    rig.head.position.y = 1.78 + bob * 0.8;
+    rig.hair.position.y = 1.82 + bob * 0.8;
+    rig.rig.position.y = 0.15 + bob * 0.15;
+    rig.handL.rotation.z = -0.12 + swing;
+    rig.handR.rotation.z = 0.12 - swing;
+    rig.footL.rotation.x = -0.12 - swing * 0.3;
+    rig.footR.rotation.x = -0.12 + swing * 0.3;
+    if (rig.footL.children[0]) rig.footL.children[0].rotation.y = swing * 0.5;
+    if (rig.footR.children[0]) rig.footR.children[0].rotation.y = -swing * 0.5;
+    rig.hat.rotation.y = Math.sin(t * 0.0016 + rig.blinkSeed * 0.0001) * 0.03;
   }
 
   function createScene() {
@@ -773,7 +927,6 @@
     state.money += customer.reward;
     state.rep += 1;
     createPizzaParticle('+' + customer.reward, customer.table.gx + 0.5, customer.table.gz + 0.5, '#8fe08f');
-    customer.table.stack = 0;
     customer.table.occupied = false;
     customer.table.customerId = null;
     updateTableVisuals(customer.table);
@@ -789,8 +942,8 @@
       toast('Nemáš pizzu');
       return true;
     }
-    if (table.stack >= table.capacity) {
-      toast('Stůl je plný');
+    if (customer.state === 'paying' || customer.state === 'leaving') {
+      toast('Host už odchází');
       return true;
     }
     state.carry -= 1;
@@ -879,7 +1032,17 @@
       toast('Málo peněz', `Potřebuješ ${table.cost}.`);
       return;
     }
+
+    const safe = tryFindSafeSpotAround(marker.position.x, marker.position.z);
+    if (!safe) {
+      toast('Není kam ustoupit', 'Nejdřív se odsuň od místa stavby.');
+      return;
+    }
+
     state.money -= table.cost;
+    state.player.x = safe.x;
+    state.player.z = safe.z;
+    player.position.set(safe.x, 0, safe.z);
     table.active = true;
     scene.add(table.group);
     marker.visible = false;
@@ -924,6 +1087,10 @@
     toast('Nic k akci', 'Přibliž se ke stolu, stavbě, peci nebo skladu.');
   }
 
+  function hasFreeTable() {
+    return tables.some(t => t.active && !t.occupied);
+  }
+
   function spawnCustomer(manual = false) {
     const table = tables.find(t => t.active && !t.occupied);
     if (!table) {
@@ -957,33 +1124,12 @@
     };
     table.occupied = true;
     table.customerId = c.id;
-    table.stack = 0;
     updateTableVisuals(table);
     rebuildBlockedMap();
     c.path = findPath(worldToCell(c.x, c.z), table.seat);
     state.customers.push(c);
     if (manual) toast('Host přišel', 'Přivolán ke stolu.');
     return true;
-  }
-
-  function animateCharacter(root, c) {
-    const r = root.userData.rig;
-    if (!r) return;
-    const t = performance.now();
-    const speedFactor = c.state === 'walking' ? 0.55 : c.state === 'leaving' ? 0.3 : 0.12;
-    const walk = Math.sin(t * 0.012 + r.blinkSeed * 0.0001 + root.position.x * 0.2 + root.position.z * 0.17);
-    const swing = walk * (0.12 + speedFactor * 0.34);
-    const bob = Math.sin(t * 0.006 + r.blinkSeed * 0.0002) * (0.008 + speedFactor * 0.015);
-    r.body.position.y = 0.78 + bob * 0.25;
-    r.head.position.y = 1.78 + bob * 0.8;
-    r.rig.position.y = 0.15 + bob * 0.15;
-    r.handL.rotation.z = -0.12 + swing;
-    r.handR.rotation.z = 0.12 - swing;
-    r.footL.rotation.x = -0.12 - swing * 0.3;
-    r.footR.rotation.x = -0.12 + swing * 0.3;
-    if (r.footL.children[0]) r.footL.children[0].rotation.y = swing * 0.5;
-    if (r.footR.children[0]) r.footR.children[0].rotation.y = -swing * 0.5;
-    r.hat.rotation.y = Math.sin(t * 0.0016 + r.blinkSeed * 0.0001) * 0.03;
   }
 
   function updateCustomer(c, dt) {
@@ -1022,7 +1168,6 @@
         state.rep = Math.max(0, state.rep - 1);
         c.table.occupied = false;
         c.table.customerId = null;
-        c.table.stack = 0;
         updateTableVisuals(c.table);
         rebuildBlockedMap();
         toast('Host odchází', 'Příliš dlouhé čekání.');
@@ -1032,7 +1177,6 @@
       if (c.eatTimer <= 0) {
         if (c.table.stack > 0) {
           c.table.stack -= 1;
-          c.served += 1;
           c.eaten += 1;
           updateTableVisuals(c.table);
           createPizzaParticle('-pizza', c.table.gx + 0.5, c.table.gz + 0.5, '#ffcf6f');
@@ -1047,7 +1191,7 @@
       payAndLeave(c);
     }
     c.mesh.position.set(c.x, 0, c.z);
-    animateCharacter(c.mesh, c);
+    updateCharacterAnimation(c.mesh, c.state);
   }
 
   function updateParticles(dt) {
@@ -1101,10 +1245,6 @@
     camera.position.y += (desiredY - camera.position.y) * t;
     camera.position.z += (desiredZ - camera.position.z) * t;
     camera.lookAt(px, 0.95, pz);
-  }
-
-  function hasFreeTable() {
-    return tables.some(t => t.active && !t.occupied);
   }
 
   function makeRewardButton() {
@@ -1346,7 +1486,7 @@
     player.position.set(state.player.x, 0, state.player.z);
     ovenStack.setCount(ovenStack.count);
     carryStack.setCount(state.carry);
-    toast('Engine ready', 'Dva stoly na startu, build spoty a okamžité placení.');
+    toast('Engine ready', 'Dva stoly na startu, build spoty a bezpečné stavění.');
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     window.addEventListener('resize', () => {
