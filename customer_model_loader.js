@@ -1,0 +1,1 @@
+console.log('customer model loader stub');
