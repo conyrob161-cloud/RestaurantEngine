@@ -479,7 +479,7 @@
       }
     } else if (c.state === 'waiting') {
       if (c.table.stack > c.eaten) { c.state = 'eating'; c.eatTimer = 0.06; }
-      else { c.waitTimer -= dt; if (c.waitTimer <= 0) { c.state = 'leaving'; c.path = findPath(worldToCell(c.x, c.z), WORLD.entrance); c.pathIndex = 0; state.rep = Math.max(0, state.rep - 1); c.table.stack = 0; c.table.occupied = false; c.table.customerId = null; updateTableVisuals(c.table); rebuildBlockedMap(); toast('Host odchází', 'Příliš dlouhé čekání.'); } }
+      else { c.waitTimer -= dt; if (c.waitTimer <= 0) { c.state = 'leaving'; c.path = findPath(worldToCell(c.x, c.z), WORLD.entrance); c.pathIndex = 0; state.rep = Math.max(0, state.rep - 1); c.table.occupied = false; c.table.customerId = null; updateTableVisuals(c.table); rebuildBlockedMap(); toast('Host odchází', 'Příliš dlouhé čekání.'); } }
     } else if (c.state === 'eating') {
       c.eatTimer -= dt;
       if (c.eatTimer <= 0) {
@@ -498,7 +498,6 @@
     state.money += customer.reward;
     state.rep += 1;
     createParticle(`+${customer.reward}`, customer.table.gx + 0.5, customer.table.gz + 0.5, '#8fe08f');
-    customer.table.stack = 0;
     customer.table.occupied = false;
     customer.table.customerId = null;
     updateTableVisuals(customer.table);
