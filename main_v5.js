@@ -576,6 +576,7 @@
     const customer = makeCharacter('customer', idSeed);
     customer.scale.setScalar(0.98);
     customer.position.set(WORLD.entrance.gx + 0.5, 0, WORLD.entrance.gz + 0.5);
+    scene.add(customer);
     const order = 1 + Math.floor(Math.random() * 3);
     const reward = order === 1 ? 15 : order === 2 ? 35 : 60;
     const c = { id: idSeed, table, x: WORLD.entrance.gx + 0.5, z: WORLD.entrance.gz + 0.5, state: 'walking', waitTimer: 18 + Math.random() * 10, eatTimer: 0, payTimer: 0, order, eaten: 0, reward, path: [], pathIndex: 0, mesh: customer, paid: false, dead: false };
