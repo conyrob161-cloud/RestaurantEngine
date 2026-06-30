@@ -12,6 +12,24 @@
   <div id="app">
     <canvas id="game" aria-label="3D game canvas"></canvas>
 
+    <div id="guest-overlay" style="position:absolute;inset:0;z-index:4;pointer-events:none;">
+      <div style="position:absolute;left:26%;top:49%;transform:translate(-50%,-50%);width:60px;height:82px;filter:drop-shadow(0 10px 6px rgba(0,0,0,.24));animation:guestFloat 3s ease-in-out infinite;">
+        <div style="position:absolute;left:50%;bottom:6px;width:30px;height:40px;transform:translateX(-50%);border-radius:14px 14px 10px 10px;background:#4f7dc8;"></div>
+        <div style="position:absolute;left:50%;bottom:44px;width:24px;height:24px;transform:translateX(-50%);border-radius:50%;background:#f2cfb1;"></div>
+        <div style="position:absolute;left:50%;top:-18px;transform:translateX(-50%);padding:2px 8px;border-radius:999px;background:rgba(17,24,39,.88);color:#fff;font:700 11px system-ui,sans-serif;white-space:nowrap;">Host</div>
+      </div>
+      <div style="position:absolute;left:52%;top:59%;transform:translate(-50%,-50%);width:60px;height:82px;filter:drop-shadow(0 10px 6px rgba(0,0,0,.24));animation:guestFloat 3.3s ease-in-out infinite;animation-delay:.12s;">
+        <div style="position:absolute;left:50%;bottom:6px;width:30px;height:40px;transform:translateX(-50%);border-radius:14px 14px 10px 10px;background:#2ec77f;"></div>
+        <div style="position:absolute;left:50%;bottom:44px;width:24px;height:24px;transform:translateX(-50%);border-radius:50%;background:#f2cfb1;"></div>
+        <div style="position:absolute;left:50%;top:-18px;transform:translateX(-50%);padding:2px 8px;border-radius:999px;background:rgba(17,24,39,.88);color:#fff;font:700 11px system-ui,sans-serif;white-space:nowrap;">Host</div>
+      </div>
+      <div style="position:absolute;left:79%;top:68%;transform:translate(-50%,-50%);width:60px;height:82px;filter:drop-shadow(0 10px 6px rgba(0,0,0,.24));animation:guestFloat 2.9s ease-in-out infinite;animation-delay:.24s;">
+        <div style="position:absolute;left:50%;bottom:6px;width:30px;height:40px;transform:translateX(-50%);border-radius:14px 14px 10px 10px;background:#e24c4b;"></div>
+        <div style="position:absolute;left:50%;bottom:44px;width:24px;height:24px;transform:translateX(-50%);border-radius:50%;background:#f2cfb1;"></div>
+        <div style="position:absolute;left:50%;top:-18px;transform:translateX(-50%);padding:2px 8px;border-radius:999px;background:rgba(17,24,39,.88);color:#fff;font:700 11px system-ui,sans-serif;white-space:nowrap;">Host</div>
+      </div>
+    </div>
+
     <div class="hud">
       <div class="panel">
         <div class="panel-title">Restaurant Zombie</div>
@@ -49,6 +67,11 @@
       <div class="stick" id="stick"><div class="nub" id="nub"></div></div>
     </div>
   </div>
+  <script>
+    const guestStyle = document.createElement('style');
+    guestStyle.textContent = '@keyframes guestFloat{0%,100%{transform:translate(-50%,-50%) translateY(0)}50%{transform:translate(-50%,-50%) translateY(-5px)}}';
+    document.head.appendChild(guestStyle);
+  </script>
   <script src="main_v5.js?v=5"></script>
 </body>
 </html>
