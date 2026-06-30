@@ -479,7 +479,7 @@
       }
     } else if (c.state === 'waiting') {
       if (c.table.stack > c.eaten) { c.state = 'eating'; c.eatTimer = 0.06; }
-      else { c.waitTimer -= dt; if (c.waitTimer <= 0) { c.state = 'leaving'; c.path = findPath(worldToCell(c.x, c.z), WORLD.entrance); c.pathIndex = 0; state.rep = Math.max(0, state.rep - 1); c.table.occupied = false; c.table.customerId = null; updateTableVisuals(c.table); rebuildBlockedMap(); toast('Host odchází', 'Příliš dlouhé čekání.'); } }
+      else { c.waitTimer -= dt; if (c.waitTimer <= 0) { c.state = 'leaving'; c.path = findPath(worldToCell(c.x, c.z), WORLD.entrance); c.pathIndex = 0; state.rep = Math.max(0, state.rep - 1); c.table.stack = 0; c.table.occupied = false; c.table.customerId = null; updateTableVisuals(c.table); rebuildBlockedMap(); toast('Host odchází', 'Příliš dlouhé čekání.'); } }
     } else if (c.state === 'eating') {
       c.eatTimer -= dt;
       if (c.eatTimer <= 0) {
@@ -498,6 +498,7 @@
     state.money += customer.reward;
     state.rep += 1;
     createParticle(`+${customer.reward}`, customer.table.gx + 0.5, customer.table.gz + 0.5, '#8fe08f');
+    customer.table.stack = 0;
     customer.table.occupied = false;
     customer.table.customerId = null;
     updateTableVisuals(customer.table);
@@ -579,6 +580,7 @@
     const order = 1 + Math.floor(Math.random() * 3);
     const reward = order === 1 ? 15 : order === 2 ? 35 : 60;
     const c = { id: idSeed, table, x: WORLD.entrance.gx + 0.5, z: WORLD.entrance.gz + 0.5, state: 'walking', waitTimer: 18 + Math.random() * 10, eatTimer: 0, payTimer: 0, order, eaten: 0, reward, path: [], pathIndex: 0, mesh: customer, paid: false, dead: false };
+    table.stack = 0;
     table.occupied = true; table.customerId = c.id; updateTableVisuals(table); rebuildBlockedMap(); c.path = findPath(worldToCell(c.x, c.z), table.seat); state.customers.push(c); if (manual) toast('Host přišel', 'Přivolán ke stolu.'); return true;
   }
 
@@ -608,7 +610,7 @@
       if (typeof data.ovenLevel === 'number') state.ovenLevel = data.ovenLevel;
       if (data.player) { if (typeof data.player.x === 'number') state.player.x = data.player.x; if (typeof data.player.z === 'number') state.player.z = data.player.z; if (typeof data.player.angle === 'number') state.player.angle = data.player.angle; }
       if (data.oven) { if (typeof data.oven.stack === 'number') ovenStack.count = data.oven.stack; if (typeof data.oven.timer === 'number') state.ovenTimer = data.oven.timer; }
-      if (Array.isArray(data.tables)) data.tables.forEach((src, i) => { if (!tables[i]) return; tables[i].active = !!src.active; tables[i].capacity = typeof src.capacity === 'number' ? src.capacity : tables[i].capacity; tables[i].stack = typeof src.stack === 'number' ? src.stack : tables[i].stack; if (tables[i].active) scene.add(tables[i].group); else { const marker = buildMarkers[i]; if (marker) marker.visible = true; } updateTableVisuals(tables[i]); });
+      if (Array.isArray(data.tables)) data.tables.forEach((src, i) => { if (!tables[i]) return; tables[i].active = !!src.active; tables[i].capacity = typeof src.capacity === 'number' ? src.capacity : tables[i].capacity; tables[i].stack = 0; tables[i].customerId = null; tables[i].occupied = false; if (tables[i].active) scene.add(tables[i].group); else { const marker = buildMarkers[i]; if (marker) marker.visible = true; } updateTableVisuals(tables[i]); });
       rebuildBlockedMap();
     } catch (err) { console.warn(err); }
   }
@@ -629,7 +631,7 @@
   function makeRewardButton() { const btn = document.createElement('button'); btn.id = 'adRewardBtn'; btn.className = 'secondary'; btn.style.marginLeft = '8px'; btn.textContent = 'Reklama +5'; btn.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); const now = performance.now(); if (now < state.adCooldownAt) return toast('Reklama ještě není připravená', `${Math.ceil((state.adCooldownAt - now) / 1000)} s`); state.money += 5; state.adCooldownAt = now + 30000; toast('Odměna za reklamu', '+5 peněz'); }); btn.addEventListener('click', (e) => { e.preventDefault(); btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true })); }); return btn; }
 
   function init() {
-    createScene(); setupJoystick(); ui.spawnBtn.addEventListener('click', () => spawnCustomer(true)); ui.buyStockBtn.addEventListener('click', buyStock); ui.upgradeCarryBtn.addEventListener('click', upgradeCarry); ui.upgradeOvenBtn.addEventListener('click', upgradeOven); ui.saveBtn.addEventListener('click', save); ui.resetBtn.addEventListener('click', reset); ui.actionBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); interact(); }); ui.actionBtn.addEventListener('touchstart', (e) => { e.preventDefault(); interact(); }, { passive: false }); ui.actionBtn.addEventListener('click', (e) => { e.preventDefault(); interact(); }); ui.actionBtn.style.touchAction = 'manipulation'; document.querySelector('.top-actions')?.appendChild(makeRewardButton()); load(); state.player.x = clamp(state.player.x, 1.2, GRID_W - 1.2); state.player.z = clamp(state.player.z, 1.2, GRID_H - 1.2); player.position.set(state.player.x, 0, state.player.z); ovenStack.setCount(ovenStack.count); carryStack.setCount(state.carry); toast('Stable v13', 'Zbylé pizzy na stolech se teď počítají pro další hosty.'); window.addEventListener('keydown', onKeyDown); window.addEventListener('keyup', onKeyUp); window.addEventListener('resize', () => { renderer.setSize(window.innerWidth, window.innerHeight, false); camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75)); }); requestAnimationFrame(updateLoop);
+    createScene(); setupJoystick(); ui.spawnBtn.addEventListener('click', () => spawnCustomer(true)); ui.buyStockBtn.addEventListener('click', buyStock); ui.upgradeCarryBtn.addEventListener('click', upgradeCarry); ui.upgradeOvenBtn.addEventListener('click', upgradeOven); ui.saveBtn.addEventListener('click', save); ui.resetBtn.addEventListener('click', reset); ui.actionBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); interact(); }); ui.actionBtn.addEventListener('touchstart', (e) => { e.preventDefault(); interact(); }, { passive: false }); ui.actionBtn.addEventListener('click', (e) => { e.preventDefault(); interact(); }); ui.actionBtn.style.touchAction = 'manipulation'; document.querySelector('.top-actions')?.appendChild(makeRewardButton()); load(); state.player.x = clamp(state.player.x, 1.2, GRID_W - 1.2); state.player.z = clamp(state.player.z, 1.2, GRID_H - 1.2); player.position.set(state.player.x, 0, state.player.z); ovenStack.setCount(ovenStack.count); carryStack.setCount(state.carry); toast('Stable v14', 'Stoly se po odchodu hostů uklízejí automaticky.'); window.addEventListener('keydown', onKeyDown); window.addEventListener('keyup', onKeyUp); window.addEventListener('resize', () => { renderer.setSize(window.innerWidth, window.innerHeight, false); camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75)); }); requestAnimationFrame(updateLoop);
   }
 
   function updateLoop(now) {
