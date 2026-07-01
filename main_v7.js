@@ -212,7 +212,7 @@
   function addWallSegment(x, z, h, color) { const m = new THREE.Mesh(new THREE.BoxGeometry(1, h, 1), new THREE.MeshStandardMaterial({ color, roughness: 0.98 })); m.position.set(x, h / 2, z); return m; }
   function createParticle(text, x, z, color) { const p = makeLabelSprite(text, '#111827', color || '#fff', 1.8, 0.8); p.sprite.position.set(x, 1.6, z); scene.add(p.sprite); state.particles.push({ sprite: p.sprite, life: 1, speed: 0.4 }); }
   function updateParticles(dt) { for (const p of state.particles) { p.life -= dt; p.sprite.position.y += dt * p.speed; p.sprite.material.opacity = clamp(p.life, 0, 1); } for (let i = state.particles.length - 1; i >= 0; i--) { const p = state.particles[i]; if (p.life > 0) continue; scene.remove(p.sprite); p.sprite.material.map?.dispose?.(); p.sprite.material.dispose(); state.particles.splice(i, 1); } }
-  function updateTables() { const now = performance.now(); tables.forEach(t => { if (!t.active) return; t.label.sprite.material.opacity = dist(state.player.x, state.player.z, t.gx + 0.5, t.gz + 0.5) < 2.2 ? 1 : 0.72; }); }
+  function updateTables() { tables.forEach(t => { if (!t.active) return; t.label.sprite.material.opacity = dist(state.player.x, state.player.z, t.gx + 0.5, t.gz + 0.5) < 2.2 ? 1 : 0.72; }); }
   function updateCamera(dt) { const t = 1 - Math.pow(0.001, dt); camera.position.x += (state.player.x + 11.5 - camera.position.x) * t; camera.position.y += (16.8 - camera.position.y) * t; camera.position.z += (state.player.z + 11.5 - camera.position.z) * t; camera.lookAt(state.player.x, 0.95, state.player.z); }
 
   function createScene() {
@@ -233,8 +233,8 @@
     const grill = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.9, 1.0), new THREE.MeshStandardMaterial({ color: 0x5670a0, roughness: 0.95 })); grill.position.set(WORLD.burger.gx + 0.5, 0.45, WORLD.burger.gz + 0.5); scene.add(grill);
     const ovenTop = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.16, 0.92), new THREE.MeshStandardMaterial({ color: 0xf1d19b, roughness: 0.95 })); ovenTop.position.set(WORLD.pizza.gx + 0.5, 0.98, WORLD.pizza.gz + 0.5); scene.add(ovenTop);
     const grillTop = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.16, 0.92), new THREE.MeshStandardMaterial({ color: 0xbfd4ff, roughness: 0.95 })); grillTop.position.set(WORLD.burger.gx + 0.5, 0.98, WORLD.burger.gz + 0.5); scene.add(grillTop);
-    scene.add(makeLabelSprite('PEC', '#3d2417', '#fff', 1.2, 0.55).sprite.clone().position.set(WORLD.pizza.gx + 0.5, 1.7, WORLD.pizza.gz + 0.5));
-    scene.add(makeLabelSprite('GRIL', '#1f3553', '#fff', 1.2, 0.55).sprite.clone().position.set(WORLD.burger.gx + 0.5, 1.7, WORLD.burger.gz + 0.5));
+    const pizzaLabel = makeLabelSprite('PEC', '#3d2417', '#fff', 1.2, 0.55); pizzaLabel.sprite.position.set(WORLD.pizza.gx + 0.5, 1.7, WORLD.pizza.gz + 0.5); scene.add(pizzaLabel.sprite);
+    const grillLabel = makeLabelSprite('GRIL', '#1f3553', '#fff', 1.2, 0.55); grillLabel.sprite.position.set(WORLD.burger.gx + 0.5, 1.7, WORLD.burger.gz + 0.5); scene.add(grillLabel.sprite);
     const counter = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.95, 0.8), new THREE.MeshStandardMaterial({ color: 0x4f7f68, roughness: 0.95 })); counter.position.set(WORLD.counter.gx + 0.5, 0.48, WORLD.counter.gz + 0.5); scene.add(counter); const counterTop = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.12, 0.86), new THREE.MeshStandardMaterial({ color: 0xdde8dd, roughness: 0.95 })); counterTop.position.set(WORLD.counter.gx + 0.5, 0.98, WORLD.counter.gz + 0.5); scene.add(counterTop); const cash = new THREE.Mesh(new THREE.BoxGeometry(1.35, 1.0, 0.85), new THREE.MeshStandardMaterial({ color: 0x647cff, roughness: 0.95 })); cash.position.set(WORLD.cash.gx + 0.5, 0.5, WORLD.cash.gz + 0.5); scene.add(cash);
 
     player = makeCharacter('player', 'player'); player.position.set(state.player.x, 0, state.player.z); scene.add(player);
@@ -251,8 +251,6 @@
 
   function updateCarryHUD() { ui.carry.textContent = `P:${state.carry.pizza} B:${state.carry.burger}`; }
   function updateHUD() { ui.money.textContent = Math.floor(state.money); ui.stock.textContent = state.stock; ui.rep.textContent = state.rep; ui.waiting.textContent = state.customers.filter(c => !c.dead && c.state !== 'leaving').length; ui.oven.textContent = `P${state.stationCounts.pizza} / B${state.stationCounts.burger}`; ui.upgradeCarryBtn.textContent = `Kapacita (${15 * state.carryCap})`; ui.upgradeOvenBtn.textContent = `Kuchyň (${20 * Math.max(state.stationLevels.pizza, state.stationLevels.burger)})`; updateCarryHUD(); }
-
-  function setStationLabel(type) { const p = WORLD[type]; const label = makeLabelSprite(type === 'pizza' ? 'PŘIPRAVENO' : 'BURGERY', type === 'pizza' ? '#3d2417' : '#1f3553', '#fff', 1.7, 0.55); label.sprite.position.set(p.gx + 0.5, 1.7, p.gz + 0.5); scene.add(label.sprite); }
 
   function updateStations(dt) {
     ['pizza', 'burger'].forEach(type => {
@@ -273,7 +271,7 @@
     if (!needed) return false;
     if (table.items.length >= table.capacity) return toast('Stůl je plný', 'Max 10 položek.'), true;
     state.carry[needed] -= 1; table.items.push(needed); updateTableVisuals(table); updateCarryHUD(); createParticle('-' + FOOD_EMOJI[needed], table.gx + 0.5, table.gz + 0.5, '#ffcf6f');
-    if (customer.state === 'waiting' && customer.canEat && customer.canEat()) { customer.state = 'eating'; customer.eatTimer = 3; }
+    if (customer.state === 'waiting' && customer.canEat()) { customer.state = 'eating'; customer.eatTimer = 3; }
     toast('Podáno', FOOD_EMOJI[needed]); return true;
   }
 
@@ -286,8 +284,7 @@
   function spawnCustomer(manual = false) {
     const table = tables.find(t => t.active && !t.occupied); if (!table) { if (manual) toast('Žádný volný stůl', 'Nejdřív postav nový stůl.'); return false; }
     const idSeed = 'cust-' + Math.random().toString(36).slice(2); const customerMesh = makeCharacter('customer', idSeed); customerMesh.scale.setScalar(0.98); customerMesh.position.set(WORLD.entrance.gx + 0.5, 0, WORLD.entrance.gz + 0.5); scene.add(customerMesh);
-    const order = []; const count = 1 + Math.floor(Math.random() * 2);
-    for (let i = 0; i < count; i++) order.push(FOOD[Math.floor(Math.random() * FOOD.length)]);
+    const order = []; const count = 1 + Math.floor(Math.random() * 2); for (let i = 0; i < count; i++) order.push(FOOD[Math.floor(Math.random() * FOOD.length)]);
     const need = { pizza: 0, burger: 0 }; order.forEach(t => need[t]++);
     const customer = {
       id: idSeed, table, mesh: customerMesh, x: WORLD.entrance.gx + 0.5, z: WORLD.entrance.gz + 0.5,
@@ -376,9 +373,16 @@
   function updatePlayer(dt) {
     let dx = 0, dz = 0; if (state.keys['w'] || state.keys['arrowup']) dz -= 1; if (state.keys['s'] || state.keys['arrowdown']) dz += 1; if (state.keys['a'] || state.keys['arrowleft']) dx -= 1; if (state.keys['d'] || state.keys['arrowright']) dx += 1; if (state.touch.active) { dx += state.touch.dx; dz += state.touch.dz; }
     const len = Math.hypot(dx, dz); if (len > 0.001) { dx /= len; dz /= len; const nx = state.player.x + dx * state.player.speed * dt; const nz = state.player.z + dz * state.player.speed * dt; if (canOccupy(nx, state.player.z)) state.player.x = nx; if (canOccupy(state.player.x, nz)) state.player.z = nz; state.player.angle = Math.atan2(dx, dz); }
-    player.position.set(state.player.x, 0, state.player.z); player.rotation.y = state.player.angle; }
+    player.position.set(state.player.x, 0, state.player.z); player.rotation.y = state.player.angle;
+  }
   function updateChef() { const t = performance.now(); chef.rotation.y = Math.sin(t * 0.0012) * 0.08; }
-  function updateStationsVisual() { const p = WORLD.pizza, b = WORLD.burger; }
+  function updateStations(dt) {
+    ['pizza', 'burger'].forEach(type => {
+      const level = state.stationLevels[type]; const interval = type === 'pizza' ? Math.max(1.5, 4.2 - level * 0.25) : Math.max(2.0, 5.2 - level * 0.22);
+      state.stationTimers[type] += dt;
+      while (state.stationTimers[type] >= interval) { state.stationTimers[type] -= interval; if (state.stock > 0 && state.stationCounts[type] < 10) { state.stock -= 1; state.stationCounts[type] += 1; createParticle(type === 'pizza' ? '+🍕' : '+🍔', WORLD[type].gx + 0.5, WORLD[type].gz + 0.5, type === 'pizza' ? '#ffd166' : '#ffb36a'); } else break; }
+    });
+  }
   function spawnLoop(dt) { state.lastSpawn += dt; if (state.lastSpawn > 8.5) { if (hasFreeTable()) { if (spawnCustomer(false)) state.lastSpawn = 0; } else state.lastSpawn = 7.5; } }
   function updateLoop(now) {
     try {
