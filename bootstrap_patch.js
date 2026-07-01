@@ -1,35 +1,50 @@
 (() => {
-  const isFoodArray = (value) => Array.isArray(value) && value.length > 0 && value.every((item) => item === 'pizza' || item === 'burger');
-  const callbackUsesRemaining = (callback) => typeof callback === 'function' && /remaining/.test(Function.prototype.toString.call(callback));
+  const originalPush = Array.prototype.push;
 
-  const originalSome = Array.prototype.some;
-  const originalFind = Array.prototype.find;
-
-  Array.prototype.some = function somePatched(callback, thisArg) {
-    try {
-      if (isFoodArray(this) && callbackUsesRemaining(callback)) {
-        return this.length > 0;
-      }
-    } catch {
-      // Fall through to the original implementation.
-    }
-    return originalSome.call(this, callback, thisArg);
+  const isCustomerShape = (value) => {
+    if (!value || typeof value !== 'object') return false;
+    return Boolean(value.table && value.mesh && value.remaining && value.order && typeof value.state === 'string');
   };
 
-  Array.prototype.find = function findPatched(callback, thisArg) {
-    try {
-      if (isFoodArray(this) && callbackUsesRemaining(callback)) {
-        return this.length > 0 ? this[0] : undefined;
-      }
-    } catch {
-      // Fall through to the original implementation.
-    }
-    return originalFind.call(this, callback, thisArg);
+  const isServeWrite = () => {
+    const stack = new Error().stack || '';
+    return stack.includes('serveToCustomer');
   };
 
-  const originalFillText = CanvasRenderingContext2D.prototype.fillText;
-  CanvasRenderingContext2D.prototype.fillText = function fillTextPatched(text, ...rest) {
-    if (text === 'OK') text = '…';
-    return originalFillText.call(this, text, ...rest);
+  const installRemainingGuards = (customer) => {
+    const remaining = customer.remaining;
+    if (!remaining || remaining.__guarded) return;
+
+    const backing = {
+      pizza: Number(remaining.pizza) || 0,
+      burger: Number(remaining.burger) || 0,
+    };
+
+    Object.defineProperty(remaining, '__guarded', { value: true, enumerable: false });
+
+    for (const type of ['pizza', 'burger']) {
+      Object.defineProperty(remaining, type, {
+        configurable: true,
+        enumerable: true,
+        get() {
+          return backing[type];
+        },
+        set(next) {
+          if (isServeWrite()) {
+            return;
+          }
+          backing[type] = Math.max(0, Number(next) || 0);
+        },
+      });
+    }
+  };
+
+  Array.prototype.push = function pushPatched(...items) {
+    for (const item of items) {
+      if (isCustomerShape(item)) {
+        installRemainingGuards(item);
+      }
+    }
+    return originalPush.apply(this, items);
   };
 })();
