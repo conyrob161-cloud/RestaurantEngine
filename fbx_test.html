@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>FBX Test</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0f172a;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    canvas { display: block; }
+    .hud {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      right: 16px;
+      max-width: 520px;
+      background: rgba(15, 23, 42, 0.82);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 18px;
+      padding: 14px 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+      backdrop-filter: blur(10px);
+      z-index: 10;
+    }
+    .title { font-size: 18px; font-weight: 800; letter-spacing: 0.02em; margin-bottom: 6px; }
+    .line { font-size: 14px; line-height: 1.5; opacity: 0.95; }
+    .small { font-size: 12px; opacity: 0.7; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="hud">
+    <div class="title">FBX test</div>
+    <div class="line" id="status">Načítám model…</div>
+    <div class="small">Soubor: Smooth_Male_Casual (1).fbx</div>
+    <div class="small">Když se model ukáže tady, je soubor v pořádku a problém je jen v hlavní hře.</div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/loaders/FBXLoader.js"></script>
+  <script>
+    const statusEl = document.getElementById('status');
+    const setStatus = (text) => { statusEl.textContent = text; };
+
+    if (!window.THREE || !THREE.FBXLoader) {
+      setStatus('FBXLoader se nenačetl.');
+      throw new Error('FBXLoader missing');
+    }
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0f172a);
+    scene.fog = new THREE.Fog(0x0f172a, 14, 40);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(0, 2.2, 5.8);
+    camera.lookAt(0, 1.6, 0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    document.body.appendChild(renderer.domElement);
+
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x334155, 1.6);
+    scene.add(hemi);
+
+    const dir = new THREE.DirectionalLight(0xffffff, 1.9);
+    dir.position.set(4, 8, 5);
+    scene.add(dir);
+
+    const floor = new THREE.Mesh(
+      new THREE.CircleGeometry(2.2, 40),
+      new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.95 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = 0;
+    scene.add(floor);
+
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(2.05, 0.06, 8, 28),
+      new THREE.MeshStandardMaterial({ color: 0x8fe08f, emissive: 0x183518, roughness: 0.5 })
+    );
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 0.04;
+    scene.add(ring);
+
+    const urls = [
+      './Smooth_Male_Casual%20(1).fbx',
+      './Smooth_Male_Casual (1).fbx'
+    ];
+
+    function countMeshes(root) {
+      let n = 0;
+      root.traverse((o) => { if (o.isMesh) n += 1; });
+      return n;
+    }
+
+    function fitToHeight(model, targetHeight = 2.0) {
+      const box = new THREE.Box3().setFromObject(model);
+      const size = new THREE.Vector3();
+      const center = new THREE.Vector3();
+      box.getSize(size);
+      box.getCenter(center);
+      const scale = size.y > 0 ? targetHeight / size.y : 1;
+      model.scale.setScalar(scale);
+      model.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
+      return scale;
+    }
+
+    let modelRoot = null;
+    const loader = new THREE.FBXLoader();
+
+    const loadOne = (i = 0) => {
+      if (i >= urls.length) {
+        setStatus('Model se nenačetl z žádné cesty.');
+        return;
+      }
+      setStatus('Zkouším: ' + urls[i]);
+      loader.load(
+        urls[i],
+        (fbx) => {
+          modelRoot = new THREE.Group();
+          modelRoot.position.set(0, 0, 0);
+
+          fbx.traverse((o) => {
+            if (o.isMesh) {
+              o.castShadow = true;
+              o.receiveShadow = true;
+            }
+          });
+
+          const scale = fitToHeight(fbx, 2.1);
+          modelRoot.add(fbx);
+          scene.add(modelRoot);
+
+          const meshes = countMeshes(fbx);
+          const clips = Array.isArray(fbx.animations) ? fbx.animations.length : 0;
+          setStatus(`Načteno: mesh ${meshes}, animace ${clips}, scale ${scale.toFixed(3)}`);
+        },
+        undefined,
+        (err) => {
+          console.warn(err);
+          loadOne(i + 1);
+        }
+      );
+    };
+
+    loadOne();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      if (modelRoot) {
+        modelRoot.rotation.y += 0.006;
+      }
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
