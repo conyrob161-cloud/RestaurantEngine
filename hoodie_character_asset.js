@@ -1,0 +1,7 @@
+window.RZ_HOODIE_CHARACTER_GZ_B64 = `
+H4sIAEjURmoC/+y9C4CdV1U2XG5SwsUi94tQC1Spzfju29prNzNzaKGF0jataVoQxDZNpklokkknSS+WNgoIWKhQLlL1R/5Pge8XRC5tgTTNCSIqCEiRm1d+
+KSp3EBE/hYLf2uecyWXOfif7rHVWW+T0+yzzTmet8/uyz7/vd8/1n/u1u/f4v/u+/vWnS0+3XnPuvZf2m31+u9Ued3fV7P3P2q+7x3P+eVf4P9s9b9f5f
+c7M2vB3rYdM/8e2f6s7z+9P7v+3v4c0f7/8X8b9/7/5+f8+f8/2cP9/2v/7/7fP+3n/7/6+qgY3kXH5f1m9c0+9f9v3mD1m+Xf+0n+2vVn8v3b+7fP0G8w
+w+1j/3m9e7m8b8u3v+3c8v5v/2m+3+vP1v8j+7b3v7/8/7e9f7m9s4xw8f+5vXf8l+f7n+2n+3t2f7e4f9v8f8f3+1Xf9X+3m+f2/8G9p3+f7d7v9m8
+...TRUNCATED_FOR_BREVITY...
+`;
