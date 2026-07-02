@@ -1,167 +1,317 @@
 (() => {
-  console.log('[FBX TEST] customer_model_loader.js loaded');
-
-  const MODEL_URLS = [
-    './Smooth_Male_Casual%20(1).fbx',
-    './Smooth_Male_Casual (1).fbx',
+  const MODEL_CANDIDATES = [
+    { key: 'smooth', url: './Smooth_Male_Casual (1).fbx' },
+    { key: 'smooth-encoded', url: './Smooth_Male_Casual%20(1).fbx' },
+    { key: 'hoodie', url: './Casual_Hoodie.fbx' },
   ];
 
-  const sceneState = {
-    template: null,
-    probe: null,
-    statusLabel: null,
-    statusText: 'FBX TEST: loading…',
-    injected: false,
+  const CHARACTER_TYPES = new Set(['player', 'chef', 'customer']);
+  const STATE_ALIASES = {
+    idle: ['idle', 'stand', 'wait', 'rest', 'pose'],
+    walk: ['walk', 'run', 'jog', 'move', 'moveforward'],
+    eat: ['eat', 'bite', 'chew', 'drink', 'consume'],
   };
 
-  function makeLabelSprite(text, bg = '#111827', fg = '#ffffff') {
-    const c = document.createElement('canvas');
-    c.width = 512;
-    c.height = 256;
-    const ctx = c.getContext('2d');
-    const tex = new THREE.CanvasTexture(c);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.minFilter = THREE.LinearFilter;
-    tex.magFilter = THREE.LinearFilter;
+  const originalAdd = THREE.Object3D.prototype.add;
+  const templateCache = new Map();
+  const pendingRoots = new Set();
+  const rootState = new WeakMap();
+  const activeMixers = new Set();
+  const clock = new THREE.Clock();
 
-    const roundRect = (x, y, w, h, r) => {
-      ctx.beginPath();
-      ctx.moveTo(x + r, y);
-      ctx.lineTo(x + w - r, y);
-      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-      ctx.lineTo(x + w, y + h - r);
-      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-      ctx.lineTo(x + r, y + h);
-      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-      ctx.lineTo(x, y + r);
-      ctx.quadraticCurveTo(x, y, x + r, y);
-      ctx.closePath();
-    };
+  let defaultModelKey = MODEL_CANDIDATES[0].key;
+  let forceNeutralMaterials = false;
 
-    const draw = (value) => {
-      ctx.clearRect(0, 0, c.width, c.height);
-      ctx.fillStyle = bg;
-      roundRect(24, 44, 464, 168, 32);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.18)';
-      ctx.lineWidth = 6;
-      ctx.stroke();
-      ctx.fillStyle = fg;
-      ctx.font = '900 50px system-ui, Arial';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(value, 256, 128);
-      tex.needsUpdate = true;
-    };
+  function normalizeKey(value) {
+    return String(value || '').trim().toLowerCase();
+  }
 
-    draw(text);
-    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
-    sprite.scale.set(3.4, 1.3, 1);
-    return { sprite, draw };
+  function getCandidateByKey(key) {
+    const normalized = normalizeKey(key);
+    return MODEL_CANDIDATES.find((c) => normalizeKey(c.key) === normalized || normalizeKey(c.url) === normalized);
+  }
+
+  function pickModelUrl(root) {
+    const preferred = root?.userData?.characterModel || root?.userData?.characterModelUrl || root?.userData?.fbxModel;
+    const preferredCandidate = getCandidateByKey(preferred);
+    if (preferredCandidate) return preferredCandidate.url;
+    const defaultCandidate = getCandidateByKey(defaultModelKey);
+    return defaultCandidate?.url || MODEL_CANDIDATES[0].url;
   }
 
   function countMeshes(root) {
-    let count = 0;
-    root.traverse((obj) => {
-      if (obj.isMesh) count += 1;
+    let n = 0;
+    root.traverse((o) => {
+      if (o.isMesh || o.isSkinnedMesh) n += 1;
     });
-    return count;
+    return n;
   }
 
-  function updateStatus(text) {
-    sceneState.statusText = text;
-    if (sceneState.statusLabel) sceneState.statusLabel.draw(text);
+  function countBones(root) {
+    let n = 0;
+    root.traverse((o) => {
+      if (o.isBone) n += 1;
+    });
+    return n;
   }
 
-  function makeProbe(scene) {
-    if (sceneState.injected || !sceneState.template || !scene) return;
-    sceneState.injected = true;
+  function cloneMaterial(material, isSkinned) {
+    if (Array.isArray(material)) {
+      return material.map((m) => cloneMaterial(m, isSkinned));
+    }
 
-    const group = new THREE.Group();
-    group.name = 'fbx_diagnostic_probe';
-    group.position.set(10, 0, 12.8);
-    group.rotation.y = Math.PI * 0.45;
+    if (!material) {
+      const fallback = new THREE.MeshStandardMaterial({
+        color: 0xbdbdbd,
+        roughness: 0.9,
+        metalness: 0.0,
+        side: THREE.DoubleSide,
+      });
+      fallback.skinning = !!isSkinned;
+      return fallback;
+    }
 
-    const clone = sceneState.template.clone(true);
-    clone.traverse((obj) => {
-      if (obj.isMesh) {
-        obj.castShadow = true;
-        obj.receiveShadow = true;
+    const cloned = material.clone();
+    cloned.side = THREE.DoubleSide;
+    if ('skinning' in cloned) cloned.skinning = !!isSkinned;
+    return cloned;
+  }
+
+  function applyVisibleMaterials(root) {
+    root.traverse((o) => {
+      if (!(o.isMesh || o.isSkinnedMesh)) return;
+      o.visible = true;
+      o.castShadow = true;
+      o.receiveShadow = true;
+      if (forceNeutralMaterials) {
+        const mat = new THREE.MeshNormalMaterial({ side: THREE.DoubleSide });
+        if (o.isSkinnedMesh) mat.skinning = true;
+        o.material = mat;
+        return;
       }
+      o.material = cloneMaterial(o.material, o.isSkinnedMesh);
     });
+  }
 
-    const box = new THREE.Box3().setFromObject(clone);
+  function fitToHeight(root, targetHeight = 1.8) {
+    const box = new THREE.Box3().setFromObject(root);
     const size = new THREE.Vector3();
     const center = new THREE.Vector3();
     box.getSize(size);
     box.getCenter(center);
-    const scale = size.y > 0 ? 2.2 / size.y : 1;
-    clone.scale.setScalar(scale);
-    clone.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
-    group.add(clone);
-
-    const pad = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.95, 0.95, 0.08, 12),
-      new THREE.MeshStandardMaterial({ color: 0x3b4d7a, roughness: 0.92 })
-    );
-    pad.position.y = 0.04;
-    group.add(pad);
-
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(1.05, 0.06, 8, 24),
-      new THREE.MeshStandardMaterial({ color: 0x8fe08f, emissive: 0x1d3f1d, roughness: 0.5 })
-    );
-    ring.rotation.x = Math.PI / 2;
-    ring.position.y = 0.12;
-    group.add(ring);
-
-    const label = makeLabelSprite(sceneState.statusText, '#111827', '#ffffff');
-    label.sprite.position.set(0, 2.8, 0);
-    group.add(label.sprite);
-    sceneState.statusLabel = label;
-
-    scene.add(group);
-    sceneState.probe = group;
-    console.log('[FBX TEST] probe injected into scene', { meshCount: countMeshes(clone), animationCount: sceneState.template.animations?.length || 0, scale });
+    const scale = size.y > 0 ? targetHeight / size.y : 1;
+    root.scale.setScalar(scale);
+    root.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
+    return { box, size, center, scale };
   }
 
-  function loadModel(index = 0) {
-    if (index >= MODEL_URLS.length) {
-      console.warn('[FBX TEST] all FBX URLs failed to load');
-      updateStatus('FBX FAIL');
-      return;
+  function pickAnimationClip(animations, state) {
+    if (!animations || !animations.length) return null;
+    const normalizedState = normalizeKey(state || 'idle');
+    const aliases = STATE_ALIASES[normalizedState] || [normalizedState];
+
+    for (const alias of aliases) {
+      const clip = animations.find((a) => normalizeKey(a.name).includes(alias));
+      if (clip) return clip;
     }
 
-    if (!THREE.FBXLoader) {
-      console.error('[FBX TEST] THREE.FBXLoader is missing');
-      updateStatus('FBX LOADER MISSING');
-      return;
+    return animations[0];
+  }
+
+  function ensureActionSet(info) {
+    if (info.actions) return info.actions;
+    info.actions = new Map();
+    if (!info.template?.animations?.length || !info.mixer) return info.actions;
+
+    for (const clip of info.template.animations) {
+      const action = info.mixer.clipAction(clip);
+      action.enabled = true;
+      action.clampWhenFinished = true;
+      action.loop = THREE.LoopRepeat;
+      info.actions.set(clip.name || `clip-${info.actions.size}`, action);
+    }
+    return info.actions;
+  }
+
+  function transitionToState(info, state) {
+    const normalized = normalizeKey(state || 'idle');
+    if (info.currentState === normalized) return;
+    info.currentState = normalized;
+
+    if (!info.mixer || !info.template?.animations?.length) return;
+
+    const targetClip = pickAnimationClip(info.template.animations, normalized);
+    if (!targetClip) return;
+
+    const nextAction = info.mixer.clipAction(targetClip);
+    if (info.currentAction && info.currentAction !== nextAction) {
+      info.currentAction.fadeOut(0.15);
+    }
+    nextAction.reset().fadeIn(0.15).play();
+    info.currentAction = nextAction;
+  }
+
+  function inferState(root, info, dt) {
+    const manual = root.userData?.characterState || root.userData?.animState || root.userData?.fbxState;
+    if (manual) return normalizeKey(manual);
+
+    const currentPosition = root.getWorldPosition(new THREE.Vector3());
+    const speed = currentPosition.distanceTo(info.lastPosition) / Math.max(dt, 1 / 60);
+    info.lastPosition.copy(currentPosition);
+
+    if (speed > 0.03) {
+      info.idleSeconds = 0;
+      return 'walk';
     }
 
-    console.log('[FBX TEST] trying', MODEL_URLS[index]);
+    info.idleSeconds += dt;
+    if (root.userData?.type === 'customer' && info.idleSeconds > 1.1) return 'eat';
+    return 'idle';
+  }
+
+  function attachToRoot(root, template, templateUrl) {
+    if (!root || rootState.has(root)) return;
+
+    for (const child of root.children.slice()) {
+      if (!child.isSprite) child.visible = false;
+    }
+
+    const instance = template.clone(true);
+    instance.name = `FBXCharacter:${templateUrl}`;
+    instance.userData.__fbxInstance = true;
+    applyVisibleMaterials(instance);
+
+    const { scale } = fitToHeight(instance, 1.8);
+    root.add(instance);
+
+    const info = {
+      root,
+      template,
+      templateUrl,
+      instance,
+      mixer: null,
+      actions: null,
+      currentAction: null,
+      currentState: 'idle',
+      idleSeconds: 0,
+      lastPosition: root.getWorldPosition(new THREE.Vector3()),
+      scale,
+    };
+
+    if (template.animations?.length) {
+      info.mixer = new THREE.AnimationMixer(instance);
+      activeMixers.add(info.mixer);
+      ensureActionSet(info);
+      transitionToState(info, inferState(root, info, 0));
+    }
+
+    rootState.set(root, info);
+    return info;
+  }
+
+  async function loadTemplate(url) {
+    if (templateCache.has(url)) return templateCache.get(url);
+
     const loader = new THREE.FBXLoader();
-    loader.load(
-      MODEL_URLS[index],
-      (fbx) => {
-        sceneState.template = fbx;
-        const meshes = countMeshes(fbx);
-        const clips = Array.isArray(fbx.animations) ? fbx.animations.length : 0;
-        console.log('[FBX TEST] loaded', { meshes, clips, name: fbx.name || '(unnamed)' });
-        updateStatus(`FBX OK  M${meshes} A${clips}`);
-      },
-      undefined,
-      (err) => {
-        console.warn('[FBX TEST] load failed for', MODEL_URLS[index], err);
-        loadModel(index + 1);
-      }
-    );
+    const promise = new Promise((resolve, reject) => {
+      loader.load(
+        url,
+        (fbx) => resolve(fbx),
+        undefined,
+        (err) => reject(err),
+      );
+    });
+    templateCache.set(url, promise);
+    return promise;
   }
 
-  const originalRender = THREE.WebGLRenderer.prototype.render;
-  THREE.WebGLRenderer.prototype.render = function patchedRender(scene, camera) {
-    if (sceneState.template) makeProbe(scene);
-    return originalRender.call(this, scene, camera);
+  function queuePendingRoots(root) {
+    if (CHARACTER_TYPES.has(normalizeKey(root?.userData?.type))) {
+      pendingRoots.add(root);
+      return true;
+    }
+    return false;
+  }
+
+  function attachPendingRoots(template, templateUrl) {
+    for (const root of Array.from(pendingRoots)) {
+      if (!rootState.has(root) && CHARACTER_TYPES.has(normalizeKey(root?.userData?.type))) {
+        attachToRoot(root, template, templateUrl);
+      }
+      pendingRoots.delete(root);
+    }
+  }
+
+  function tryAttachRoot(root) {
+    if (!CHARACTER_TYPES.has(normalizeKey(root?.userData?.type))) return;
+    if (rootState.has(root)) return;
+
+    const templateUrl = pickModelUrl(root);
+    const templatePromise = loadTemplate(templateUrl).catch(() => null);
+
+    templatePromise.then((template) => {
+      if (template) {
+        attachToRoot(root, template, templateUrl);
+      } else {
+        pendingRoots.add(root);
+      }
+    });
+  }
+
+  THREE.Object3D.prototype.add = function patchedAdd(...objs) {
+    for (const obj of objs) {
+      if (obj && typeof obj === 'object' && queuePendingRoots(obj)) {
+        tryAttachRoot(obj);
+      }
+    }
+    return originalAdd.apply(this, objs);
   };
 
-  loadModel();
+  function preloadModels() {
+    for (const candidate of MODEL_CANDIDATES) {
+      loadTemplate(candidate.url)
+        .then((template) => {
+          attachPendingRoots(template, candidate.url);
+        })
+        .catch(() => {});
+    }
+  }
+
+  function tick() {
+    const dt = clock.getDelta();
+    for (const mixer of activeMixers) mixer.update(dt);
+
+    for (const [root, info] of Array.from(rootState.entries?.() || [])) {
+      if (!root || !info) continue;
+      const state = inferState(root, info, dt);
+      transitionToState(info, state);
+      if (info.mixer) info.mixer.update(0); // keep action state live; dt already applied globally
+    }
+
+    requestAnimationFrame(tick);
+  }
+
+  window.RZFBXCharacters = {
+    setDefaultModel(modelKeyOrUrl) {
+      defaultModelKey = getCandidateByKey(modelKeyOrUrl)?.key || defaultModelKey;
+    },
+    setNeutralMaterials(enabled = true) {
+      forceNeutralMaterials = !!enabled;
+    },
+    attach(root, modelKeyOrUrl) {
+      if (!root || rootState.has(root)) return null;
+      const preferred = getCandidateByKey(modelKeyOrUrl);
+      const candidateUrl = preferred?.url || pickModelUrl(root);
+      return loadTemplate(candidateUrl)
+        .then((template) => attachToRoot(root, template, candidateUrl))
+        .catch(() => null);
+    },
+    reload() {
+      templateCache.clear();
+      preloadModels();
+    },
+  };
+
+  preloadModels();
+  requestAnimationFrame(tick);
 })();
