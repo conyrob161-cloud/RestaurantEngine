@@ -51,6 +51,9 @@
   let mixer = null;
   let clock = new THREE.Clock();
   let started = false;
+  let debugBoxHelper = null;
+  let debugSkeletonHelper = null;
+  let debugAxesHelper = null;
 
   const orbit = {
     target: new THREE.Vector3(0, 1.2, 0),
@@ -62,11 +65,15 @@
   };
 
   const pointer = { dragging: false, lastX: 0, lastY: 0 };
-  const modelMeta = { meshes: 0, clips: 0, scale: 1 };
+  const modelMeta = { meshes: 0, bones: 0, clips: 0, scale: 1 };
 
   const status = (t) => { statusEl.textContent = t; };
-  const stats = () => { statsEl.textContent = `Meshes: ${modelMeta.meshes} | Animace: ${modelMeta.clips} | Scale: ${modelMeta.scale.toFixed(3)} | Radius: ${orbit.radius.toFixed(2)} | θ ${orbit.theta.toFixed(2)} | φ ${orbit.phi.toFixed(2)}`; };
-  const countMeshes = (root) => { let n = 0; root.traverse((o) => { if (o.isMesh) n += 1; }); return n; };
+  const stats = () => {
+    statsEl.textContent = `Meshes: ${modelMeta.meshes} | Bones: ${modelMeta.bones} | Animace: ${modelMeta.clips} | Scale: ${modelMeta.scale.toFixed(3)} | Radius: ${orbit.radius.toFixed(2)} | θ ${orbit.theta.toFixed(2)} | φ ${orbit.phi.toFixed(2)}`;
+  };
+
+  const countMeshes = (root) => { let n = 0; root.traverse((o) => { if (o.isMesh || o.isSkinnedMesh) n += 1; }); return n; };
+  const countBones = (root) => { let n = 0; root.traverse((o) => { if (o.isBone) n += 1; }); return n; };
 
   const fitModel = (model, h = 2.0) => {
     const box = new THREE.Box3().setFromObject(model);
@@ -78,6 +85,7 @@
     model.scale.setScalar(s);
     model.position.set(-center.x * s, -box.min.y * s, -center.z * s);
     modelMeta.meshes = countMeshes(model);
+    modelMeta.bones = countBones(model);
     modelMeta.clips = Array.isArray(model.animations) ? model.animations.length : 0;
     modelMeta.scale = s;
     orbit.target.set(0, Math.max(0.75, size.y * 0.45 * s), 0);
@@ -145,6 +153,9 @@
     ring.rotation.x = Math.PI / 2;
     ring.position.y = 0.05;
     scene.add(ring);
+    scene.add(new THREE.GridHelper(8, 8, 0x475569, 0x1e293b));
+    debugAxesHelper = new THREE.AxesHelper(2.5);
+    scene.add(debugAxesHelper);
 
     const resize = () => {
       const w = mount.clientWidth || window.innerWidth;
@@ -215,6 +226,8 @@
         const dt = clock.getDelta();
         if (mixer) mixer.update(dt);
         if (modelRoot) modelRoot.rotation.y += 0.006;
+        if (debugBoxHelper && modelRoot) debugBoxHelper.update();
+        if (debugSkeletonHelper) debugSkeletonHelper.update();
         updateCamera();
         renderer.render(scene, camera);
       };
@@ -224,13 +237,29 @@
 
   function clearModel() {
     if (modelRoot && scene) scene.remove(modelRoot);
+    if (debugBoxHelper && scene) scene.remove(debugBoxHelper);
+    if (debugSkeletonHelper && scene) scene.remove(debugSkeletonHelper);
     modelRoot = null;
     mixer = null;
+    debugBoxHelper = null;
+    debugSkeletonHelper = null;
     clock = new THREE.Clock();
     modelMeta.meshes = 0;
+    modelMeta.bones = 0;
     modelMeta.clips = 0;
     modelMeta.scale = 1;
     stats();
+  }
+
+  function prepareMaterials(root) {
+    root.traverse((o) => {
+      if (o.isMesh || o.isSkinnedMesh) {
+        o.visible = true;
+        const mat = new THREE.MeshNormalMaterial({ side: THREE.DoubleSide, flatShading: false });
+        if (o.isSkinnedMesh) mat.skinning = true;
+        o.material = mat;
+      }
+    });
   }
 
   function loadModel(i = 0) {
@@ -245,13 +274,23 @@
       (fbx) => {
         clearModel();
         modelRoot = new THREE.Group();
-        fbx.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+        fbx.visible = true;
+        fbx.position.set(0, 0, 0);
+        fbx.rotation.set(0, 0, 0);
+        fbx.scale.setScalar(1);
+        prepareMaterials(fbx);
         const scale = fitModel(fbx, 2.15);
         modelRoot.add(fbx);
         scene.add(modelRoot);
 
+        debugBoxHelper = new THREE.BoxHelper(fbx, 0xffff00);
+        scene.add(debugBoxHelper);
+        debugSkeletonHelper = new THREE.SkeletonHelper(fbx);
+        debugSkeletonHelper.material.color.set(0x00ffff);
+        scene.add(debugSkeletonHelper);
+
         const clipCount = Array.isArray(fbx.animations) ? fbx.animations.length : 0;
-        status(`Načteno: mesh ${modelMeta.meshes}, animace ${clipCount}, scale ${scale.toFixed(3)} | táhni nebo použij tlačítka`);
+        status(`Načteno: mesh ${modelMeta.meshes}, bones ${modelMeta.bones}, animace ${clipCount}, scale ${scale.toFixed(3)} | táhni nebo použij tlačítka`);
         if (clipCount > 0) {
           mixer = new THREE.AnimationMixer(fbx);
           mixer.clipAction(fbx.animations[0]).reset().play();
@@ -271,7 +310,7 @@
   });
   loadBtn.addEventListener('click', () => loadModel(0));
   fitBtn.addEventListener('click', () => fitCameraToModel());
-  resetBtn.addEventListener('click', () => { orbit.theta = Math.PI * 0.25; orbit.phi = Math.PI * 0.42; updateCamera(); status('Kamera resetována'); });
+  resetBtn.addEventListener('click', () => { orbit.theta = Math.PI * 0.25; orbit.phi = Math.PI * 0.42; orbit.radius = Math.max(3.5, orbit.radius); updateCamera(); status('Kamera resetována'); });
   leftBtn.addEventListener('click', () => { orbit.theta -= 0.12; updateCamera(); });
   rightBtn.addEventListener('click', () => { orbit.theta += 0.12; updateCamera(); });
   upBtn.addEventListener('click', () => { orbit.phi -= 0.08; updateCamera(); });
