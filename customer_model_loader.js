@@ -15,7 +15,7 @@
   const originalAdd = THREE.Object3D.prototype.add;
   const templateCache = new Map();
   const pendingRoots = new Set();
-  const rootState = new WeakMap();
+  const rootState = new Map();
   const activeMixers = new Set();
   const clock = new THREE.Clock();
 
@@ -281,11 +281,10 @@
     const dt = clock.getDelta();
     for (const mixer of activeMixers) mixer.update(dt);
 
-    for (const [root, info] of Array.from(rootState.entries?.() || [])) {
+    for (const [root, info] of rootState.entries()) {
       if (!root || !info) continue;
       const state = inferState(root, info, dt);
       transitionToState(info, state);
-      if (info.mixer) info.mixer.update(0); // keep action state live; dt already applied globally
     }
 
     requestAnimationFrame(tick);
