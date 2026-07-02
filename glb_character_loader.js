@@ -29,6 +29,10 @@
     root.scale.setScalar(s);
     root.position.set(-center.x * s, -box.min.y * s, -center.z * s);
   }
+  function cloneScene(scene) {
+    if (THREE.SkeletonUtils?.clone) return THREE.SkeletonUtils.clone(scene);
+    return scene.clone(true);
+  }
   function applyMaterials(root) {
     root.traverse((o) => {
       if (!(o.isMesh || o.isSkinnedMesh)) return;
@@ -61,7 +65,7 @@
     const url = pickUrl(root);
     load(url).then((gltf) => {
       for (const c of root.children.slice()) if (!c.isSprite) c.visible = false;
-      const model = gltf.scene.clone(true);
+      const model = cloneScene(gltf.scene);
       applyMaterials(model);
       fit(model);
       root.add(model);
