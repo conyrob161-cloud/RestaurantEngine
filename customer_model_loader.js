@@ -1,35 +1,20 @@
 (() => {
-  const MODEL_URL = './Smooth_Male_Casual%20(1).fbx';
-  const customerRoots = new Set();
-  const rootToMixer = new WeakMap();
-  const rootToModel = new WeakMap();
-  const originalAdd = THREE.Object3D.prototype.add;
-  const clock = new THREE.Clock();
-  let template = null;
-  let templateAnimations = [];
-  let probeAdded = false;
+  console.log('[FBX TEST] customer_model_loader.js loaded');
 
-  function hideOldParts(root) {
-    for (const child of root.children) {
-      if (child.isSprite) continue;
-      if (child.geometry?.type === 'CircleGeometry') continue;
-      child.visible = false;
-    }
-  }
+  const MODEL_URLS = [
+    './Smooth_Male_Casual%20(1).fbx',
+    './Smooth_Male_Casual (1).fbx',
+  ];
 
-  function fitToHeight(model, targetHeight = 1.8) {
-    const box = new THREE.Box3().setFromObject(model);
-    const size = new THREE.Vector3();
-    const center = new THREE.Vector3();
-    box.getSize(size);
-    box.getCenter(center);
-    const scale = size.y > 0 ? targetHeight / size.y : 1;
-    model.scale.setScalar(scale);
-    model.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
-    return scale;
-  }
+  const sceneState = {
+    template: null,
+    probe: null,
+    statusLabel: null,
+    statusText: 'FBX TEST: loading…',
+    injected: false,
+  };
 
-  function createLabelSprite(text, bg = '#111827', fg = '#ffffff') {
+  function makeLabelSprite(text, bg = '#111827', fg = '#ffffff') {
     const c = document.createElement('canvas');
     c.width = 512;
     c.height = 256;
@@ -38,6 +23,7 @@
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.minFilter = THREE.LinearFilter;
     tex.magFilter = THREE.LinearFilter;
+
     const roundRect = (x, y, w, h, r) => {
       ctx.beginPath();
       ctx.moveTo(x + r, y);
@@ -51,6 +37,7 @@
       ctx.quadraticCurveTo(x, y, x + r, y);
       ctx.closePath();
     };
+
     const draw = (value) => {
       ctx.clearRect(0, 0, c.width, c.height);
       ctx.fillStyle = bg;
@@ -66,121 +53,115 @@
       ctx.fillText(value, 256, 128);
       tex.needsUpdate = true;
     };
+
     draw(text);
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
-    sprite.scale.set(2.7, 1.05, 1);
+    sprite.scale.set(3.4, 1.3, 1);
     return { sprite, draw };
   }
 
-  function attachFBX(root) {
-    if (!template || rootToModel.has(root)) return;
-    hideOldParts(root);
-
-    const model = template.clone(true);
-    model.traverse((obj) => {
-      if (obj.isMesh) {
-        obj.castShadow = true;
-        obj.receiveShadow = true;
-      }
+  function countMeshes(root) {
+    let count = 0;
+    root.traverse((obj) => {
+      if (obj.isMesh) count += 1;
     });
-    fitToHeight(model, 1.8);
-    root.add(model);
-    rootToModel.set(root, model);
-
-    if (templateAnimations.length) {
-      const mixer = new THREE.AnimationMixer(model);
-      const clip = templateAnimations[0];
-      const action = mixer.clipAction(clip);
-      action.reset().play();
-      rootToMixer.set(root, mixer);
-    }
+    return count;
   }
 
-  function addProbe(scene) {
-    if (!template || probeAdded || !scene) return;
-    probeAdded = true;
+  function updateStatus(text) {
+    sceneState.statusText = text;
+    if (sceneState.statusLabel) sceneState.statusLabel.draw(text);
+  }
+
+  function makeProbe(scene) {
+    if (sceneState.injected || !sceneState.template || !scene) return;
+    sceneState.injected = true;
 
     const group = new THREE.Group();
-    group.name = 'fbx_model_probe';
+    group.name = 'fbx_diagnostic_probe';
     group.position.set(10, 0, 12.8);
     group.rotation.y = Math.PI * 0.45;
 
-    const model = template.clone(true);
-    model.traverse((obj) => {
+    const clone = sceneState.template.clone(true);
+    clone.traverse((obj) => {
       if (obj.isMesh) {
         obj.castShadow = true;
         obj.receiveShadow = true;
       }
     });
-    fitToHeight(model, 2.0);
-    group.add(model);
+
+    const box = new THREE.Box3().setFromObject(clone);
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    box.getSize(size);
+    box.getCenter(center);
+    const scale = size.y > 0 ? 2.2 / size.y : 1;
+    clone.scale.setScalar(scale);
+    clone.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
+    group.add(clone);
 
     const pad = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.8, 0.8, 0.08, 12),
+      new THREE.CylinderGeometry(0.95, 0.95, 0.08, 12),
       new THREE.MeshStandardMaterial({ color: 0x3b4d7a, roughness: 0.92 })
     );
     pad.position.y = 0.04;
     group.add(pad);
 
     const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(0.88, 0.05, 8, 24),
+      new THREE.TorusGeometry(1.05, 0.06, 8, 24),
       new THREE.MeshStandardMaterial({ color: 0x8fe08f, emissive: 0x1d3f1d, roughness: 0.5 })
     );
     ring.rotation.x = Math.PI / 2;
     ring.position.y = 0.12;
     group.add(ring);
 
-    const label = createLabelSprite('FBX MODEL TEST', '#111827', '#ffffff');
-    label.sprite.position.set(0, 2.45, 0);
+    const label = makeLabelSprite(sceneState.statusText, '#111827', '#ffffff');
+    label.sprite.position.set(0, 2.8, 0);
     group.add(label.sprite);
+    sceneState.statusLabel = label;
 
     scene.add(group);
+    sceneState.probe = group;
+    console.log('[FBX TEST] probe injected into scene', { meshCount: countMeshes(clone), animationCount: sceneState.template.animations?.length || 0, scale });
   }
 
-  THREE.Object3D.prototype.add = function patchedAdd(...objs) {
-    for (const obj of objs) {
-      if (obj && obj.userData && obj.userData.type === 'customer') {
-        customerRoots.add(obj);
-        attachFBX(obj);
-      }
-    }
-    return originalAdd.apply(this, objs);
-  };
-
-  function loadTemplate(index = 0) {
-    if (index >= 2) {
-      console.warn('FBX load failed from all URLs.');
+  function loadModel(index = 0) {
+    if (index >= MODEL_URLS.length) {
+      console.warn('[FBX TEST] all FBX URLs failed to load');
+      updateStatus('FBX FAIL');
       return;
     }
-    const urls = [MODEL_URL, './Smooth_Male_Casual (1).fbx'];
+
+    if (!THREE.FBXLoader) {
+      console.error('[FBX TEST] THREE.FBXLoader is missing');
+      updateStatus('FBX LOADER MISSING');
+      return;
+    }
+
+    console.log('[FBX TEST] trying', MODEL_URLS[index]);
     const loader = new THREE.FBXLoader();
     loader.load(
-      urls[index],
+      MODEL_URLS[index],
       (fbx) => {
-        template = fbx;
-        templateAnimations = Array.isArray(fbx.animations) ? fbx.animations : [];
-        template.updateMatrixWorld(true);
-        for (const root of customerRoots) attachFBX(root);
+        sceneState.template = fbx;
+        const meshes = countMeshes(fbx);
+        const clips = Array.isArray(fbx.animations) ? fbx.animations.length : 0;
+        console.log('[FBX TEST] loaded', { meshes, clips, name: fbx.name || '(unnamed)' });
+        updateStatus(`FBX OK  M${meshes} A${clips}`);
       },
       undefined,
-      () => loadTemplate(index + 1)
+      (err) => {
+        console.warn('[FBX TEST] load failed for', MODEL_URLS[index], err);
+        loadModel(index + 1);
+      }
     );
   }
 
   const originalRender = THREE.WebGLRenderer.prototype.render;
   THREE.WebGLRenderer.prototype.render = function patchedRender(scene, camera) {
-    if (template) addProbe(scene);
+    if (sceneState.template) makeProbe(scene);
     return originalRender.call(this, scene, camera);
   };
 
-  function tick() {
-    const dt = clock.getDelta();
-    for (const mixer of rootToMixer.values()) {
-      mixer.update(dt);
-    }
-    requestAnimationFrame(tick);
-  }
-
-  loadTemplate();
-  requestAnimationFrame(tick);
+  loadModel();
 })();
