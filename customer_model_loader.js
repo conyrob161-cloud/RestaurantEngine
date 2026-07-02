@@ -1,5 +1,9 @@
 (() => {
-  const MODEL_URL = './Character%20Base.glb';
+  const MODEL_URLS = [
+    'https://raw.githubusercontent.com/conyrob161-cloud/RestaurantEngine/main/Character%20Base.glb',
+    './Character Base.glb',
+    './Character%20Base.glb'
+  ];
   const customerRoots = new Set();
   const originalAdd = THREE.Object3D.prototype.add;
   let template = null;
@@ -31,7 +35,7 @@
     box.getSize(size);
     box.getCenter(center);
 
-    const scale = size.y > 0 ? 1.7 / size.y : 1;
+    const scale = size.y > 0 ? 1.9 / size.y : 1;
     model.scale.setScalar(scale);
     model.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
     root.add(model);
@@ -47,13 +51,24 @@
     return originalAdd.apply(this, objs);
   };
 
-  const loader = new THREE.GLTFLoader();
-  loader.load(MODEL_URL, (gltf) => {
-    template = gltf.scene || gltf.scenes?.[0] || null;
-    if (!template) return;
-    template.updateMatrixWorld(true);
-    for (const root of customerRoots) attachModel(root);
-  }, undefined, (err) => {
-    console.warn('Character Base.glb load failed:', err);
-  });
+  function loadTemplate(urlIndex = 0) {
+    if (urlIndex >= MODEL_URLS.length) {
+      console.warn('Character Base.glb load failed from all URLs.');
+      return;
+    }
+    const loader = new THREE.GLTFLoader();
+    loader.load(
+      MODEL_URLS[urlIndex],
+      (gltf) => {
+        template = gltf.scene || gltf.scenes?.[0] || null;
+        if (!template) return;
+        template.updateMatrixWorld(true);
+        for (const root of customerRoots) attachModel(root);
+      },
+      undefined,
+      () => loadTemplate(urlIndex + 1)
+    );
+  }
+
+  loadTemplate();
 })();
