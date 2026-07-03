@@ -7,6 +7,8 @@
   const infos = new Map();
   const mixers = new Set();
   const clock = new THREE.Clock();
+  let depsState = 'CHYBÍ';
+  let depsPromise = null;
 
   const diag = document.createElement('div');
   diag.id = 'rz-diag';
@@ -27,10 +29,11 @@
     <div id="rz-d-last" style="opacity:.78;margin-top:4px;white-space:pre-wrap;">—</div>
     <button id="rz-d-hide" style="margin-top:8px;border:0;border-radius:999px;padding:8px 12px;font-weight:800;background:#ffd166;color:#111827;cursor:pointer;">Skrýt</button>
   `;
-  document.addEventListener('DOMContentLoaded', () => {
-    if (!document.getElementById('rz-diag')) document.body.appendChild(diag);
-  });
-  if (document.body && !document.getElementById('rz-diag')) document.body.appendChild(diag);
+  const attachDiag = () => {
+    if (!document.getElementById('rz-diag') && document.body) document.body.appendChild(diag);
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attachDiag, { once: true });
+  else attachDiag();
   diag.querySelector('#rz-d-hide').addEventListener('click', () => (diag.style.display = 'none'));
 
   const els = {
@@ -45,7 +48,7 @@
   const norm = (v) => String(v || '').trim().toLowerCase();
   const pickUrl = (root) => root?.userData?.characterModel || root?.userData?.characterModelUrl || MODEL_URLS[0];
   const updateCount = () => set('count', `Postavy: ${infos.size} | sledované kořeny: ${roots.size}`);
-  const updateAssets = () => set('assets', `GLTFLoader: ${THREE.GLTFLoader ? 'OK' : 'CHYBÍ'} | SkeletonUtils: ${THREE.SkeletonUtils?.clone ? 'OK' : 'CHYBÍ'}`);
+  const updateAssets = () => set('assets', `GLTFLoader: ${THREE.GLTFLoader ? 'OK' : depsState} | SkeletonUtils: ${THREE.SkeletonUtils?.clone ? 'OK' : depsState}`);
   const updateAnim = (text) => set('anim', text);
   const updateLast = (text) => set('last', text);
   const setState = (text) => set('state', `Stav: ${text}`);
@@ -95,14 +98,54 @@
     });
   }
 
-  function load(url) {
+  async function ensureDeps() {
+    if (THREE.GLTFLoader && THREE.SkeletonUtils?.clone) {
+      depsState = 'OK';
+      updateAssets();
+      return;
+    }
+    if (!depsPromise) {
+      depsState = 'NAČÍTÁM';
+      updateAssets();
+      setState('načítám podpůrné knihovny');
+      updateLast('Čekám na GLTFLoader / SkeletonUtils');
+      depsPromise = (async () => {
+        const tasks = [];
+        if (!THREE.GLTFLoader) {
+          tasks.push(import('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js').then((m) => {
+            THREE.GLTFLoader = m.GLTFLoader;
+          }));
+        }
+        if (!THREE.SkeletonUtils?.clone) {
+          tasks.push(import('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/utils/SkeletonUtils.js').then((m) => {
+            THREE.SkeletonUtils = m.SkeletonUtils;
+          }));
+        }
+        await Promise.all(tasks);
+        depsState = 'OK';
+        updateAssets();
+        setState('podpůrné knihovny připraveny');
+      })().catch((err) => {
+        depsState = 'CHYBÍ';
+        updateAssets();
+        setState('chyba podpůrných knihoven');
+        updateLast(String(err?.message || err));
+        throw err;
+      });
+    }
+    return depsPromise;
+  }
+
+  async function load(url) {
     if (cache.has(url)) return cache.get(url);
     setState(`načítám ${url}`);
     set('url', `Model: ${url}`);
-    const p = new Promise((resolve, reject) => {
-      if (!THREE.GLTFLoader) return reject(new Error('GLTFLoader missing'));
-      new THREE.GLTFLoader().load(url, resolve, undefined, reject);
-    });
+    const p = (async () => {
+      await ensureDeps();
+      if (!THREE.GLTFLoader) throw new Error('GLTFLoader missing after import');
+      const loader = new THREE.GLTFLoader();
+      return await new Promise((resolve, reject) => loader.load(url, resolve, undefined, reject));
+    })();
     cache.set(url, p);
     return p;
   }
@@ -137,6 +180,8 @@
       updateCount();
       updateLast(`připojeno k ${root.userData.type}\nscale: ${scale.toFixed(3)}`);
     }).catch((err) => {
+      depsState = 'CHYBÍ';
+      updateAssets();
       setState(`chyba při načítání ${url}`);
       updateLast(String(err?.message || err));
       console.warn('[GLB loader] failed', url, err);
@@ -182,7 +227,7 @@
   window.RZCharacterSystem = {
     attach,
     setModelUrl(url) { if (url && !MODEL_URLS.includes(url)) MODEL_URLS.unshift(url); set('url', `Model: ${url}`); },
-    reload() { cache.clear(); setState('cache smazán, čekám na nové připojení'); },
+    reload() { cache.clear(); depsPromise = null; depsState = 'CHYBÍ'; updateAssets(); setState('cache smazán, čekám na nové připojení'); },
   };
 
   updateAssets();
