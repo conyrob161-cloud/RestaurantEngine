@@ -1,7 +1,6 @@
 (() => {
   if (window.__rzCharacterOverhaulActive) return;
   window.__rzCharacterOverhaulActive = true;
-
   if (!window.THREE) return;
 
   const TARGET_TYPES = new Set(['player', 'chef', 'customer']);
@@ -25,9 +24,11 @@
     x ^= x << 13; x ^= x >>> 17; x ^= x << 5;
     return (x >>> 0) / 4294967296;
   };
+  const pick = (arr, seed, salt = 0) => arr[Math.floor(rand(seed, salt) * arr.length) % arr.length];
 
   const playerPalettes = [0x4d78b5, 0x3b82f6, 0x2f6fad, 0x5f87d8];
   const customerPalettes = [0x5f7dd6, 0xd96c6c, 0x4c9b72, 0x9e78d2, 0xdb8b47, 0x5a9bdb];
+  const chefCoats = [0xf8f4eb, 0xf1eee7, 0xf6f1e7];
   const legPalettes = [0x1d2230, 0x22262d, 0x272a31, 0x2c2f35];
   const hairPalettes = [0x2c2a28, 0x3f2e24, 0x5e452f, 0x1c1f27, 0x6b4f3a];
   const skinPalette = [0xf1cfb5, 0xeec7aa, 0xe7bf9f, 0xdcae87];
@@ -38,7 +39,7 @@
       roughness,
       metalness,
       emissive,
-      emissiveIntensity: emissive ? 0.08 : 0.0,
+      emissiveIntensity: emissive ? 0.06 : 0.0,
       flatShading: true,
     });
   }
@@ -60,72 +61,84 @@
     mesh.material = cloneMaterial(mesh.material, color, roughness, metalness, emissive);
   }
 
-  function detectParts(root) {
-    const parts = {
-      body: null,
-      head: null,
-      hair: null,
-      armL: null,
-      armR: null,
-      legL: null,
-      legR: null,
-      shoeL: null,
-      shoeR: null,
-      hat: null,
-      label: null,
-    };
+  function addMesh(parent, geometry, color, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) {
+    const mesh = new THREE.Mesh(geometry, makeMaterial(color));
+    mesh.position.set(x, y, z);
+    mesh.rotation.set(rx, ry, rz);
+    mesh.scale.set(sx, sy, sz);
+    parent.add(mesh);
+    return mesh;
+  }
 
-    const candidates = [];
-    root.traverse((o) => {
-      if (o.isSprite) parts.label = o;
-      if (o.isMesh || o.isSkinnedMesh) candidates.push(o);
-    });
+  function makeEyes(seed, skin) {
+    const g = new THREE.Group();
+    const eyeMat = makeMaterial(0x111111, 0.3, 0.0, 0x000000);
+    const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), eyeMat);
+    const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), eyeMat);
+    eyeL.position.set(-0.08, 0.03, 0.26);
+    eyeR.position.set(0.08, 0.03, 0.26);
+    g.add(eyeL, eyeR);
 
-    for (const mesh of candidates) {
-      const y = mesh.position?.y ?? 0;
-      const x = mesh.position?.x ?? 0;
-      const geo = mesh.geometry?.type || '';
-
-      if (y > 2.0) {
-        if (!parts.hat) parts.hat = mesh;
-        continue;
-      }
-      if (y > 1.45 && geo === 'SphereGeometry' && !parts.head) {
-        parts.head = mesh;
-        continue;
-      }
-      if (y > 1.45 && geo === 'SphereGeometry') {
-        parts.hair = mesh;
-        continue;
-      }
-      if (y > 0.85 && geo === 'CylinderGeometry' && x < 0) {
-        parts.armL = mesh;
-        continue;
-      }
-      if (y > 0.85 && geo === 'CylinderGeometry') {
-        parts.armR = mesh;
-        continue;
-      }
-      if (y > 0.18 && geo === 'CylinderGeometry' && x < 0) {
-        parts.legL = mesh;
-        continue;
-      }
-      if (y > 0.18 && geo === 'CylinderGeometry') {
-        parts.legR = mesh;
-        continue;
-      }
-      if (y <= 0.18 && geo === 'BoxGeometry' && x < 0) {
-        parts.shoeL = mesh;
-        continue;
-      }
-      if (y <= 0.18 && geo === 'BoxGeometry') {
-        parts.shoeR = mesh;
-        continue;
-      }
-      if (!parts.body) parts.body = mesh;
+    if (seed % 3 === 0) {
+      const browMat = makeMaterial(0x241b17, 0.8);
+      const browL = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.01, 0.015), browMat);
+      const browR = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.01, 0.015), browMat);
+      browL.position.set(-0.08, 0.08, 0.24);
+      browR.position.set(0.08, 0.08, 0.24);
+      g.add(browL, browR);
     }
 
-    return parts;
+    const mouthMat = makeMaterial(0x7a4035, 0.85);
+    const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.015, 0.02), mouthMat);
+    mouth.position.set(0, -0.10, 0.26);
+    g.add(mouth);
+
+    if (seed % 4 === 0) {
+      const nose = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.05, 0.03), makeMaterial(skin, 0.96));
+      nose.position.set(0, -0.01, 0.28);
+      g.add(nose);
+    }
+
+    return g;
+  }
+
+  function makeFoot(color) {
+    const g = new THREE.Group();
+    const sole = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.04, 0.24), makeMaterial(color, 0.98));
+    sole.position.y = 0.01;
+    const toe = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), makeMaterial(color, 0.98));
+    toe.position.set(0, 0.00, 0.10);
+    toe.scale.set(1.2, 0.8, 1.0);
+    g.add(sole, toe);
+    return g;
+  }
+
+  function makeTorso(role, seed, roleColor) {
+    const g = new THREE.Group();
+    const chestColor = role === 'chef' ? pick(chefCoats, seed, 1) : roleColor;
+    const waistColor = role === 'chef' ? 0xf4efe4 : roleColor;
+    const pelvisColor = role === 'chef' ? 0xe8d9c2 : role === 'player' ? roleColor : roleColor;
+
+    const chest = addMesh(g, new THREE.CylinderGeometry(0.26, 0.34, 0.38, 6), chestColor, 0, 0.94, 0);
+    chest.scale.set(1.0, 1.0, 0.96);
+    const waist = addMesh(g, new THREE.CylinderGeometry(0.22, 0.26, 0.28, 6), waistColor, 0, 0.66, 0);
+    waist.scale.set(1.0, 1.0, 0.96);
+    const pelvis = addMesh(g, new THREE.BoxGeometry(0.38, 0.22, 0.24), pelvisColor, 0, 0.40, 0);
+    pelvis.scale.set(1.0, 1.0, 1.0);
+
+    if (role === 'chef') {
+      const apron = addMesh(g, new THREE.BoxGeometry(0.42, 0.54, 0.10), 0xe8d9c2, 0, 0.58, 0.16);
+      apron.scale.set(1.0, 1.0, 1.0);
+      const tie = addMesh(g, new THREE.BoxGeometry(0.12, 0.03, 0.03), 0xb58b5d, 0, 0.31, 0.16);
+      tie.scale.set(1.0, 1.0, 1.0);
+    }
+
+    if (role === 'player') {
+      const hood = addMesh(g, new THREE.SphereGeometry(0.22, 8, 6), 0x21314b, 0, 1.18, -0.08);
+      hood.scale.set(1.0, 0.85, 0.88);
+    }
+
+    return g;
   }
 
   function saveBase(root, parts) {
@@ -153,207 +166,184 @@
     }
   }
 
-  function makeBoot(color) {
-    const g = new THREE.Group();
-    const sole = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.06, 0.35), makeMaterial(color, 0.98));
-    sole.position.y = 0.02;
-    const top = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.10, 0.22), makeMaterial(color, 0.96));
-    top.position.set(0, 0.08, -0.03);
-    g.add(sole, top);
-    return g;
+  function detectParts(root) {
+    const parts = {
+      body: null,
+      head: null,
+      hair: null,
+      armL: null,
+      armR: null,
+      legL: null,
+      legR: null,
+      shoeL: null,
+      shoeR: null,
+      hat: null,
+      label: null,
+    };
+
+    root.traverse((o) => {
+      if (o.isSprite) parts.label = o;
+      if (!o.isMesh && !o.isSkinnedMesh) return;
+      const y = o.position?.y ?? 0;
+      const x = o.position?.x ?? 0;
+      const geo = o.geometry?.type || '';
+      if (y > 2.0) { if (!parts.hat) parts.hat = o; return; }
+      if (y > 1.45 && geo === 'SphereGeometry' && !parts.head) { parts.head = o; return; }
+      if (y > 1.45 && geo === 'SphereGeometry') { parts.hair = o; return; }
+      if (y > 0.85 && geo === 'CylinderGeometry' && x < 0) { parts.armL = o; return; }
+      if (y > 0.85 && geo === 'CylinderGeometry') { parts.armR = o; return; }
+      if (y > 0.18 && geo === 'CylinderGeometry' && x < 0) { parts.legL = o; return; }
+      if (y > 0.18 && geo === 'CylinderGeometry') { parts.legR = o; return; }
+      if (y <= 0.18 && geo === 'BoxGeometry' && x < 0) { parts.shoeL = o; return; }
+      if (y <= 0.18 && geo === 'BoxGeometry') { parts.shoeR = o; return; }
+      if (!parts.body) parts.body = o;
+    });
+
+    return parts;
   }
 
-  function makeEyes(seed, skin) {
-    const g = new THREE.Group();
-    const eyeMat = makeMaterial(0x111111, 0.3, 0.0, 0x000000);
-    const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), eyeMat);
-    const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), eyeMat);
-    eyeL.position.set(-0.08, 0.03, 0.26);
-    eyeR.position.set(0.08, 0.03, 0.26);
-    g.add(eyeL, eyeR);
+  function makeFaceOnHead(head, seed, skin, hairColor, role) {
+    const face = new THREE.Group();
+    face.name = '__rz_face';
 
-    if (seed % 3 === 0) {
-      const browMat = makeMaterial(0x241b17, 0.8);
-      const browL = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.01, 0.015), browMat);
-      const browR = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.01, 0.015), browMat);
-      browL.position.set(-0.08, 0.08, 0.24);
-      browR.position.set(0.08, 0.08, 0.24);
-      g.add(browL, browR);
+    const headScale = role === 'chef' ? 1.12 : 1.10;
+    const shell = new THREE.Mesh(new THREE.SphereGeometry(0.27, 10, 8), makeMaterial(skin, 0.96));
+    shell.scale.set(1.0, headScale, 0.98);
+    shell.position.set(0, 0.02, 0.00);
+    face.add(shell);
+
+    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.25, 10, 8), makeMaterial(hairColor, 0.98));
+    hair.scale.set(1.03, 0.76, 0.86);
+    hair.position.set(0, 0.15, -0.02);
+    face.add(hair);
+
+    const eyes = makeEyes(seed, skin);
+    eyes.position.set(0, 0.02, 0.02);
+    face.add(eyes);
+
+    if (role === 'chef') {
+      const hat = new THREE.Group();
+      const base = addMesh(hat, new THREE.CylinderGeometry(0.16, 0.16, 0.10, 6), 0xf9f9f4, 0, 0, 0);
+      base.position.y = 0.06;
+      const puff1 = addMesh(hat, new THREE.SphereGeometry(0.11, 8, 6), 0xf9f9f4, -0.08, 0.18, 0.00);
+      const puff2 = addMesh(hat, new THREE.SphereGeometry(0.14, 8, 6), 0xf9f9f4, 0.00, 0.26, 0.00);
+      const puff3 = addMesh(hat, new THREE.SphereGeometry(0.11, 8, 6), 0xf9f9f4, 0.08, 0.18, 0.00);
+      hat.position.set(0, 0.37, 0.00);
+      face.add(hat);
     }
 
-    const mouthMat = makeMaterial(0x7a4035, 0.85);
-    const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.015, 0.02), mouthMat);
-    mouth.position.set(0, -0.10, 0.26);
-    g.add(mouth);
-    return g;
+    if (role === 'player') {
+      const cap = new THREE.Group();
+      const crown = addMesh(cap, new THREE.BoxGeometry(0.30, 0.11, 0.24), 0x22314a, 0, 0.04, 0.00);
+      const brim = addMesh(cap, new THREE.BoxGeometry(0.36, 0.04, 0.12), 0x8ecae6, 0, -0.02, 0.15);
+      cap.position.set(0, 0.32, 0.05);
+      face.add(cap);
+    }
+
+    if (seed % 2 === 0) {
+      const mouth = addMesh(face, new THREE.BoxGeometry(0.10, 0.015, 0.02), 0x7a4035, 0, -0.10, 0.26);
+      mouth.scale.set(1.0, 1.0, 1.0);
+    }
+
+    if (seed % 4 === 0) {
+      const nose = addMesh(face, new THREE.BoxGeometry(0.03, 0.05, 0.03), skin, 0, -0.01, 0.28);
+    }
+
+    face.position.set(0, 0.03, 0.02);
+    head.add(face);
+    return face;
   }
 
-  function addCustomerStyle(root, parts, seed) {
-    const bodyColor = customerPalettes[seed % customerPalettes.length];
-    const hairColor = hairPalettes[(seed + 1) % hairPalettes.length];
-    const pantsColor = legPalettes[(seed + 2) % legPalettes.length];
-    const skin = skinPalette[(seed + 3) % skinPalette.length];
+  function applyRoleStyle(root, parts, seed) {
+    const role = norm(root.userData.type);
+    const bodyColor = role === 'player' ? pick(playerPalettes, seed, 1) : role === 'chef' ? pick(chefCoats, seed, 2) : pick(customerPalettes, seed, 3);
+    const hairColor = pick(hairPalettes, seed, 4);
+    const skin = pick(skinPalette, seed, 5);
+    const pantsColor = pick(legPalettes, seed, 6);
 
     setPartMaterial(parts.body, bodyColor, 0.98);
     setPartMaterial(parts.head, skin, 0.96);
     if (parts.hair) setPartMaterial(parts.hair, hairColor, 0.98);
     setPartMaterial(parts.legL, pantsColor, 1.0);
     setPartMaterial(parts.legR, pantsColor, 1.0);
-    setPartMaterial(parts.shoeL, 0x111318, 1.0);
-    setPartMaterial(parts.shoeR, 0x111318, 1.0);
-
-    const jacket = new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.36, 0.86, 6), makeMaterial(bodyColor, 0.92));
-    jacket.position.set(0, 0.82, 0);
-    if (parts.body) parts.body.add(jacket);
+    if (parts.shoeL) parts.shoeL.visible = false;
+    if (parts.shoeR) parts.shoeR.visible = false;
 
     if (parts.body) {
-      const collar = new THREE.Mesh(new THREE.RingGeometry(0.11, 0.18, 6), makeMaterial(0xfaf4e8, 0.9));
-      collar.rotation.x = -Math.PI / 2;
-      collar.position.set(0, 1.14, 0.10);
-      parts.body.add(collar);
+      const torso = makeTorso(role, seed, bodyColor);
+      torso.position.set(0, 0, 0.01);
+      parts.body.add(torso);
     }
 
     if (parts.head) {
-      const eyes = makeEyes(seed, skin);
-      parts.head.add(eyes);
-      if (seed % 2 === 0) {
-        const glassesMat = makeMaterial(0x101010, 0.35);
-        const frameL = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.008, 6, 10), glassesMat);
-        const frameR = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.008, 6, 10), glassesMat);
-        const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.008, 0.008), glassesMat);
-        frameL.position.set(-0.08, 0.02, 0.25);
-        frameR.position.set(0.08, 0.02, 0.25);
-        bridge.position.set(0, 0.02, 0.25);
-        parts.head.add(frameL, frameR, bridge);
-      }
+      makeFaceOnHead(parts.head, seed, skin, hairColor, role);
     }
 
-    if (parts.armL) parts.armL.add(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.38, 6), makeMaterial(bodyColor, 0.94)));
-    if (parts.armR) parts.armR.add(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.38, 6), makeMaterial(bodyColor, 0.94)));
-    if (parts.shoeL) parts.shoeL.add(makeBoot(0x15181f));
-    if (parts.shoeR) parts.shoeR.add(makeBoot(0x15181f));
-  }
-
-  function addChefStyle(root, parts, seed) {
-    const jacketColor = 0xf8f4eb;
-    const apronColor = 0xe8d9c2;
-    const hatColor = 0xf9f9f4;
-    const skin = skinPalette[(seed + 1) % skinPalette.length];
-    const hairColor = hairPalettes[(seed + 2) % hairPalettes.length];
-
-    setPartMaterial(parts.body, jacketColor, 0.95);
-    setPartMaterial(parts.head, skin, 0.96);
-    if (parts.hair) setPartMaterial(parts.hair, hairColor, 0.98);
-    setPartMaterial(parts.legL, 0x191919, 1.0);
-    setPartMaterial(parts.legR, 0x191919, 1.0);
-    setPartMaterial(parts.shoeL, 0x141414, 1.0);
-    setPartMaterial(parts.shoeR, 0x141414, 1.0);
-
-    const apron = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.58, 0.12), makeMaterial(apronColor, 0.96));
-    apron.position.set(0, 0.58, 0.22);
-    if (parts.body) parts.body.add(apron);
-
-    const apronTie = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.03), makeMaterial(0xb58b5d, 0.92));
-    apronTie.position.set(0, 0.28, 0.22);
-    if (parts.body) parts.body.add(apronTie);
-
-    if (parts.head) {
-      const chefHat = new THREE.Group();
-      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.12, 6), makeMaterial(hatColor, 0.85));
-      base.position.y = 0.05;
-      chefHat.add(base);
-      const puffs = [
-        [-0.10, 0.18, 0],
-        [0.00, 0.26, 0],
-        [0.10, 0.18, 0],
-      ];
-      for (const [x, y, z] of puffs) {
-        const puff = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), makeMaterial(hatColor, 0.8));
-        puff.position.set(x, y, z);
-        chefHat.add(puff);
-      }
-      chefHat.position.set(0, 0.84, 0);
-      parts.head.add(chefHat);
-      parts.head.add(makeEyes(seed, skin));
-    }
-
-    if (parts.armL) parts.armL.add(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.40, 6), makeMaterial(0xfdfbf7, 0.95)));
-    if (parts.armR) parts.armR.add(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.40, 6), makeMaterial(0xfdfbf7, 0.95)));
-    if (parts.shoeL) parts.shoeL.add(makeBoot(0x141414));
-    if (parts.shoeR) parts.shoeR.add(makeBoot(0x141414));
-  }
-
-  function addPlayerStyle(root, parts, seed) {
-    const hoodieColor = playerPalettes[seed % playerPalettes.length];
-    const hoodShadow = playerPalettes[(seed + 1) % playerPalettes.length];
-    const skin = skinPalette[(seed + 2) % skinPalette.length];
-    const hairColor = hairPalettes[(seed + 3) % hairPalettes.length];
-
-    setPartMaterial(parts.body, hoodieColor, 0.96);
-    setPartMaterial(parts.head, skin, 0.96);
-    if (parts.hair) setPartMaterial(parts.hair, hairColor, 0.98);
-    setPartMaterial(parts.legL, legPalettes[(seed + 1) % legPalettes.length], 1.0);
-    setPartMaterial(parts.legR, legPalettes[(seed + 2) % legPalettes.length], 1.0);
-    setPartMaterial(parts.shoeL, 0x10131a, 1.0);
-    setPartMaterial(parts.shoeR, 0x10131a, 1.0);
-
-    const hoodie = new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.36, 0.88, 6), makeMaterial(hoodieColor, 0.95));
-    hoodie.position.set(0, 0.82, 0);
-    if (parts.body) parts.body.add(hoodie);
-
-    const hood = new THREE.Mesh(new THREE.SphereGeometry(0.24, 8, 6), makeMaterial(hoodShadow, 0.96));
-    hood.scale.set(1.0, 0.90, 0.92);
-    hood.position.set(0, 1.14, -0.10);
-    if (parts.body) parts.body.add(hood);
-
-    if (parts.head) {
-      parts.head.add(makeEyes(seed, skin));
-      const cap = new THREE.Group();
-      const crown = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.12, 0.26), makeMaterial(0x22314a, 0.85));
-      crown.position.y = 0.04;
-      const brim = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.05, 0.16), makeMaterial(0x8ecae6, 0.82));
-      brim.position.set(0, -0.02, 0.16);
-      cap.add(crown, brim);
-      cap.position.set(0, 0.88, 0.01);
-      parts.head.add(cap);
-    }
-
-    if (parts.armL) parts.armL.add(new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 0.43, 6), makeMaterial(hoodieColor, 0.95)));
-    if (parts.armR) parts.armR.add(new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 0.43, 6), makeMaterial(hoodieColor, 0.95)));
-    if (parts.shoeL) parts.shoeL.add(makeBoot(0x10131a));
-    if (parts.shoeR) parts.shoeR.add(makeBoot(0x10131a));
-  }
-
-  function animateDetails(root, parts, info) {
-    const t = info.time;
-    const walking = info.mode === 'walk';
-    const eating = info.mode === 'eat';
-    const idle = info.mode === 'idle';
-
-    if (parts.body) {
-      parts.body.rotation.z += walking ? Math.sin(t * 10 + info.phase) * 0.02 : 0;
-      parts.body.rotation.x += eating ? 0.05 + Math.sin(t * 6 + info.phase) * 0.02 : 0;
-      parts.body.position.y += idle ? Math.sin(t * 2.0 + info.phase) * 0.006 : walking ? Math.sin(t * 10 + info.phase) * 0.012 : 0;
-    }
-    if (parts.head) {
-      parts.head.rotation.z += walking ? Math.sin(t * 10 + info.phase + 0.5) * 0.035 : Math.sin(t * 1.4 + info.phase) * 0.015;
-      parts.head.rotation.x += eating ? 0.06 + Math.sin(t * 5.5 + info.phase) * 0.02 : 0;
-      parts.head.position.y += idle ? Math.sin(t * 2.0 + info.phase) * 0.004 : walking ? Math.sin(t * 10 + info.phase) * 0.01 : 0;
-    }
-    if (parts.hair) parts.hair.rotation.z += walking ? Math.sin(t * 10 + info.phase + 0.2) * 0.03 : Math.sin(t * 1.2 + info.phase) * 0.01;
     if (parts.armL) {
-      parts.armL.rotation.z += walking ? Math.sin(t * 10 + info.phase) * 0.28 : eating ? -0.08 : 0;
-      parts.armL.rotation.x += eating ? -0.12 : 0;
+      const sleeve = addMesh(parts.armL, new THREE.CylinderGeometry(0.08, 0.09, 0.43, 6), bodyColor, 0, 0, 0);
+      sleeve.scale.set(0.96, 1.0, 0.96);
+      if (role === 'chef') sleeve.material = makeMaterial(0xfdfbf7, 0.95);
     }
     if (parts.armR) {
-      parts.armR.rotation.z += walking ? -Math.sin(t * 10 + info.phase) * 0.28 : eating ? -0.85 : 0;
-      parts.armR.rotation.x += eating ? -0.22 : 0;
+      const sleeve = addMesh(parts.armR, new THREE.CylinderGeometry(0.08, 0.09, 0.43, 6), bodyColor, 0, 0, 0);
+      sleeve.scale.set(0.96, 1.0, 0.96);
+      if (role === 'chef') sleeve.material = makeMaterial(0xfdfbf7, 0.95);
     }
-    if (parts.legL) parts.legL.rotation.z += walking ? Math.sin(t * 10 + info.phase) * 0.38 : 0;
-    if (parts.legR) parts.legR.rotation.z += walking ? -Math.sin(t * 10 + info.phase) * 0.38 : 0;
-    if (parts.shoeL) parts.shoeL.rotation.z += walking ? Math.sin(t * 10 + info.phase) * 0.12 : 0;
-    if (parts.shoeR) parts.shoeR.rotation.z += walking ? -Math.sin(t * 10 + info.phase) * 0.12 : 0;
-    if (parts.label) parts.label.position.y += walking ? Math.sin(t * 10 + info.phase) * 0.01 : Math.sin(t * 1.6 + info.phase) * 0.008;
+
+    if (parts.legL) {
+      const foot = makeFoot(role === 'player' ? 0x1b2030 : role === 'chef' ? 0x141414 : 0x1d2230);
+      foot.position.set(0, -0.62, 0.02);
+      foot.scale.set(1.0, 0.9, 1.0);
+      parts.legL.add(foot);
+    }
+    if (parts.legR) {
+      const foot = makeFoot(role === 'player' ? 0x1b2030 : role === 'chef' ? 0x141414 : 0x1d2230);
+      foot.position.set(0, -0.62, 0.02);
+      foot.scale.set(1.0, 0.9, 1.0);
+      parts.legR.add(foot);
+    }
+
+    if (role === 'chef' && parts.body) {
+      const apronTie = addMesh(parts.body, new THREE.BoxGeometry(0.15, 0.03, 0.03), 0xb58b5d, 0, 0.28, 0.20);
+      const apronPocket = addMesh(parts.body, new THREE.BoxGeometry(0.18, 0.10, 0.025), 0xd6c7ae, 0, 0.45, 0.22);
+      apronTie.scale.set(1.0, 1.0, 1.0);
+      apronPocket.scale.set(1.0, 1.0, 1.0);
+    }
+
+    if (role === 'customer' && parts.body && seed % 2 === 1) {
+      const scarf = addMesh(parts.body, new THREE.BoxGeometry(0.18, 0.05, 0.06), 0xffffff, 0, 0.76, 0.20);
+      scarf.material = makeMaterial(pick([0xe9e9e9, 0xdfe9f1, 0xf5e1df], seed, 7), 0.9);
+    }
+  }
+
+  function animateDetails(info) {
+    const { parts, t, phase, mode } = info;
+    const walking = mode === 'walk';
+    const eating = mode === 'eat';
+    const idle = mode === 'idle';
+
+    if (parts.body) {
+      parts.body.rotation.z += walking ? Math.sin(t * 10 + phase) * 0.012 : 0;
+      parts.body.rotation.x += eating ? 0.03 + Math.sin(t * 6 + phase) * 0.015 : 0;
+      parts.body.position.y += idle ? Math.sin(t * 2.0 + phase) * 0.005 : walking ? Math.sin(t * 10 + phase) * 0.010 : 0;
+    }
+    if (parts.head) {
+      parts.head.rotation.z += walking ? Math.sin(t * 10 + phase + 0.5) * 0.03 : Math.sin(t * 1.4 + phase) * 0.012;
+      parts.head.rotation.x += eating ? 0.04 + Math.sin(t * 5.5 + phase) * 0.015 : 0;
+      parts.head.position.y += idle ? Math.sin(t * 2.0 + phase) * 0.003 : walking ? Math.sin(t * 10 + phase) * 0.008 : 0;
+    }
+    if (parts.hair) parts.hair.rotation.z += walking ? Math.sin(t * 10 + phase + 0.2) * 0.02 : Math.sin(t * 1.2 + phase) * 0.008;
+    if (parts.armL) {
+      parts.armL.rotation.z += walking ? Math.sin(t * 10 + phase) * 0.22 : eating ? -0.05 : 0;
+      parts.armL.rotation.x += eating ? -0.08 : 0;
+    }
+    if (parts.armR) {
+      parts.armR.rotation.z += walking ? -Math.sin(t * 10 + phase) * 0.22 : eating ? -0.70 : 0;
+      parts.armR.rotation.x += eating ? -0.14 : 0;
+    }
+    if (parts.legL) parts.legL.rotation.z += walking ? Math.sin(t * 10 + phase) * 0.32 : 0;
+    if (parts.legR) parts.legR.rotation.z += walking ? -Math.sin(t * 10 + phase) * 0.32 : 0;
+    if (parts.label) parts.label.position.y += walking ? Math.sin(t * 10 + phase) * 0.008 : Math.sin(t * 1.6 + phase) * 0.006;
   }
 
   function enhanceRoot(root) {
@@ -362,15 +352,13 @@
     const parts = detectParts(root);
     const base = saveBase(root, parts);
 
-    if (root.userData.type === 'chef') addChefStyle(root, parts, seed);
-    else if (root.userData.type === 'player') addPlayerStyle(root, parts, seed);
-    else addCustomerStyle(root, parts, seed);
+    applyRoleStyle(root, parts, seed);
 
     root.userData.__rzEnhanced = true;
     states.set(root, {
       seed,
       phase: rand(seed, 7) * Math.PI * 2,
-      time: rand(seed, 13) * 1000,
+      t: rand(seed, 13) * 1000,
       mode: 'idle',
       speed: 0,
       lastPos: root.getWorldPosition(new THREE.Vector3()),
@@ -395,10 +383,10 @@
       const pos = root.getWorldPosition(new THREE.Vector3());
       info.speed = pos.distanceTo(info.lastPos) / Math.max(dt, 1 / 60);
       info.lastPos.copy(pos);
-      info.time += dt;
-      info.mode = info.speed > 0.03 ? 'walk' : (norm(root.userData.type) === 'customer' && info.time % 100 > 1.1 ? 'eat' : 'idle');
+      info.t += dt;
+      info.mode = info.speed > 0.03 ? 'walk' : (norm(root.userData.type) === 'customer' && info.t % 100 > 1.1 ? 'eat' : 'idle');
       restoreBase(info.parts, info.base);
-      animateDetails(root, info.parts, info);
+      animateDetails(info);
     }
     requestAnimationFrame(tick);
   }
