@@ -219,5 +219,6 @@
   };
 
   document.write('<script src="character_overhaul.js?v=1"><\/script>');
+  document.write('<script src="character_torso_patch.js?v=1"><\/script>');
   requestAnimationFrame(step);
 })();
