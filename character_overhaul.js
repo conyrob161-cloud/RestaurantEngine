@@ -20,7 +20,9 @@
   };
   const rand = (seed, salt = 0) => {
     let x = (seed ^ (salt * 0x9e3779b9)) >>> 0;
-    x ^= x << 13; x ^= x >>> 17; x ^= x << 5;
+    x ^= x << 13;
+    x ^= x >>> 17;
+    x ^= x << 5;
     return (x >>> 0) / 4294967296;
   };
   const pick = (arr, seed, salt = 0) => arr[Math.floor(rand(seed, salt) * arr.length) % arr.length];
@@ -71,18 +73,18 @@
 
     ctx.clearRect(0, 0, 256, 256);
 
-    // subtle hair silhouette at the top so the face can stay simple and readable
+    // Hair / hat silhouette
     ctx.fillStyle = hair;
     ctx.beginPath();
-    ctx.ellipse(128, 80, 92, 66, 0, Math.PI, Math.PI * 2);
+    ctx.ellipse(128, 80, 90, 64, 0, Math.PI, Math.PI * 2);
     ctx.fill();
 
     if (role === 'chef') {
       ctx.fillStyle = '#f9f9f4';
       ctx.beginPath();
-      ctx.ellipse(128, 66, 72, 38, 0, Math.PI, Math.PI * 2);
+      ctx.ellipse(128, 68, 70, 36, 0, Math.PI, Math.PI * 2);
       ctx.fill();
-      ctx.fillRect(64, 50, 128, 28);
+      ctx.fillRect(60, 52, 136, 26);
     }
 
     if (role === 'player') {
@@ -90,68 +92,69 @@
       ctx.beginPath();
       ctx.arc(128, 72, 56, Math.PI, Math.PI * 2);
       ctx.fill();
-      ctx.fillRect(70, 56, 116, 24);
+      ctx.fillRect(70, 58, 116, 24);
       ctx.fillStyle = '#8ecae6';
-      ctx.fillRect(58, 76, 140, 10);
+      ctx.fillRect(56, 78, 144, 10);
     }
 
-    // face area in the lower center
+    // Face base
     ctx.fillStyle = skin;
     ctx.beginPath();
-    ctx.ellipse(128, 140, 72, 84, 0, 0, Math.PI * 2);
+    ctx.ellipse(128, 144, 70, 82, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // ears
+    // Ears
     ctx.beginPath();
     ctx.ellipse(56, 146, 10, 18, -0.1, 0, Math.PI * 2);
     ctx.ellipse(200, 146, 10, 18, 0.1, 0, Math.PI * 2);
     ctx.fill();
 
-    // eyes
+    // Eyes
     ctx.fillStyle = eye;
     ctx.beginPath();
-    ctx.arc(104, 132, 7, 0, Math.PI * 2);
-    ctx.arc(152, 132, 7, 0, Math.PI * 2);
+    ctx.arc(104, 134, 7, 0, Math.PI * 2);
+    ctx.arc(152, 134, 7, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#f5f5f5';
     ctx.beginPath();
-    ctx.arc(102, 130, 2.5, 0, Math.PI * 2);
-    ctx.arc(154, 130, 2.5, 0, Math.PI * 2);
+    ctx.arc(102, 132, 2.5, 0, Math.PI * 2);
+    ctx.arc(154, 132, 2.5, 0, Math.PI * 2);
     ctx.fill();
 
-    // brows
+    // Brows
     ctx.strokeStyle = '#2b211b';
     ctx.lineWidth = 5;
     ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(88, 118); ctx.lineTo(110, 116);
-    ctx.moveTo(146, 116); ctx.lineTo(168, 118);
+    ctx.moveTo(88, 120); ctx.lineTo(110, 118);
+    ctx.moveTo(146, 118); ctx.lineTo(168, 120);
     ctx.stroke();
 
-    // nose
+    // Nose
     ctx.strokeStyle = 'rgba(60,40,30,0.5)';
     ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.moveTo(128, 136); ctx.lineTo(128, 150);
+    ctx.moveTo(128, 138); ctx.lineTo(128, 152);
     ctx.stroke();
 
-    // mouth
+    // Mouth
     ctx.strokeStyle = mouth;
     ctx.lineWidth = 5;
     ctx.beginPath();
     if (role === 'chef') {
-      ctx.moveTo(110, 170); ctx.quadraticCurveTo(128, 180, 146, 170);
+      ctx.moveTo(110, 172); ctx.quadraticCurveTo(128, 182, 146, 172);
     } else if (seed % 3 === 0) {
-      ctx.moveTo(112, 170); ctx.lineTo(144, 170);
+      ctx.moveTo(112, 172); ctx.lineTo(144, 172);
     } else {
-      ctx.moveTo(112, 166); ctx.quadraticCurveTo(128, 182, 144, 166);
+      ctx.moveTo(112, 168); ctx.quadraticCurveTo(128, 182, 144, 168);
     }
     ctx.stroke();
 
+    // Cheeks
     ctx.fillStyle = cheek;
     ctx.beginPath();
-    ctx.ellipse(86, 154, 16, 9, -0.2, 0, Math.PI * 2);
-    ctx.ellipse(170, 154, 16, 9, 0.2, 0, Math.PI * 2);
+    ctx.ellipse(86, 156, 16, 9, -0.2, 0, Math.PI * 2);
+    ctx.ellipse(170, 156, 16, 9, 0.2, 0, Math.PI * 2);
     ctx.fill();
 
     const texture = new THREE.CanvasTexture(canvas);
@@ -180,84 +183,76 @@
     group.name = '__rz_character';
 
     const skin = pick(skinColors, seed, 1);
-    const hair = pick(hairColors, seed, 2);
     const bodyColor = role === 'player' ? pick(playerColors, seed, 3) : role === 'chef' ? pick(chefCoats, seed, 3) : pick(customerColors, seed, 3);
     const pants = pick(pantsColors, seed, 4);
 
     const parts = {
       group,
-      chest: new THREE.Group(),
+      body: new THREE.Group(),
       head: new THREE.Group(),
       armL: new THREE.Group(),
       armR: new THREE.Group(),
       legL: new THREE.Group(),
       legR: new THREE.Group(),
-      body: new THREE.Group(),
       face: null,
     };
 
-    // torso: chest / waist / hips
-    mesh(parts.body, new THREE.CylinderGeometry(0.25, 0.30, 0.34, 6), bodyColor, 0, 0.72, 0);
-    mesh(parts.body, new THREE.CylinderGeometry(0.22, 0.25, 0.24, 6), bodyColor, 0, 0.46, 0);
-    mesh(parts.body, new THREE.BoxGeometry(0.36, 0.18, 0.22), pants, 0, 0.20, 0);
+    // More human-like torso proportions
+    mesh(parts.body, new THREE.CylinderGeometry(0.26, 0.30, 0.40, 6), bodyColor, 0, 0.76, 0);
+    mesh(parts.body, new THREE.CylinderGeometry(0.22, 0.25, 0.26, 6), bodyColor, 0, 0.46, 0);
+    mesh(parts.body, new THREE.BoxGeometry(0.38, 0.18, 0.24), pants, 0, 0.18, 0);
 
     if (role === 'chef') {
-      mesh(parts.body, new THREE.BoxGeometry(0.40, 0.52, 0.10), 0xe8d9c2, 0, 0.46, 0.16);
-      mesh(parts.body, new THREE.BoxGeometry(0.13, 0.03, 0.03), 0xb58b5d, 0, 0.18, 0.20);
+      mesh(parts.body, new THREE.BoxGeometry(0.40, 0.52, 0.10), 0xe8d9c2, 0, 0.44, 0.16);
+      mesh(parts.body, new THREE.BoxGeometry(0.13, 0.03, 0.03), 0xb58b5d, 0, 0.16, 0.20);
     }
 
-    // head and face
-    mesh(parts.head, new THREE.SphereGeometry(0.23, 10, 8), skin, 0, 0.98, 0.02, 0, 0, 0, 1.0, 1.06, 0.98);
+    // Head is the actual head (no floating face plate)
+    mesh(parts.head, new THREE.SphereGeometry(0.21, 12, 10), skin, 0, 1.08, 0.02, 0, 0, 0, 1.0, 1.05, 0.98);
     const face = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.34, 0.36),
-      new THREE.MeshBasicMaterial({
+      new THREE.SphereGeometry(0.211, 12, 10),
+      new THREE.MeshStandardMaterial({
         map: faceTexture(role, seed),
-        transparent: true,
-        depthWrite: false,
+        roughness: 0.95,
+        metalness: 0,
+        transparent: false,
         side: THREE.DoubleSide,
       })
     );
-    face.position.set(0, 0.98, 0.25);
+    face.position.set(0, 1.08, 0.02);
     parts.head.add(face);
     parts.face = face;
 
-    // simple hair / hats
     if (role === 'chef') {
-      mesh(parts.head, new THREE.CylinderGeometry(0.15, 0.15, 0.10, 6), 0xf9f9f4, 0, 1.16, 0);
-      mesh(parts.head, new THREE.SphereGeometry(0.11, 8, 6), 0xf9f9f4, -0.08, 1.24, 0);
-      mesh(parts.head, new THREE.SphereGeometry(0.14, 8, 6), 0xf9f9f4, 0.00, 1.30, 0);
-      mesh(parts.head, new THREE.SphereGeometry(0.11, 8, 6), 0xf9f9f4, 0.08, 1.24, 0);
+      mesh(parts.head, new THREE.CylinderGeometry(0.15, 0.15, 0.10, 6), 0xf9f9f4, 0, 1.31, 0);
+      mesh(parts.head, new THREE.SphereGeometry(0.11, 8, 6), 0xf9f9f4, -0.08, 1.39, 0);
+      mesh(parts.head, new THREE.SphereGeometry(0.14, 8, 6), 0xf9f9f4, 0.00, 1.45, 0);
+      mesh(parts.head, new THREE.SphereGeometry(0.11, 8, 6), 0xf9f9f4, 0.08, 1.39, 0);
     } else if (role === 'player') {
-      mesh(parts.head, new THREE.BoxGeometry(0.28, 0.10, 0.22), 0x22314a, 0, 1.18, 0.00);
-      mesh(parts.head, new THREE.BoxGeometry(0.34, 0.04, 0.10), 0x8ecae6, 0, 1.13, 0.14);
-    } else {
-      mesh(parts.head, new THREE.SphereGeometry(0.22, 10, 8), hair, 0, 1.16, -0.03, 0, 0, 0, 1.02, 0.70, 0.88);
+      mesh(parts.head, new THREE.BoxGeometry(0.28, 0.10, 0.22), 0x22314a, 0, 1.29, 0.00);
+      mesh(parts.head, new THREE.BoxGeometry(0.34, 0.04, 0.10), 0x8ecae6, 0, 1.24, 0.14);
     }
 
-    // limbs: simple, readable proportions
-    mesh(parts.armL, new THREE.CylinderGeometry(0.07, 0.08, 0.34, 6), role === 'chef' ? 0xfdfbf7 : bodyColor, 0, 0, 0, 0, 0, Math.PI / 2);
-    mesh(parts.armR, new THREE.CylinderGeometry(0.07, 0.08, 0.34, 6), role === 'chef' ? 0xfdfbf7 : bodyColor, 0, 0, 0, 0, 0, Math.PI / 2);
-    mesh(parts.legL, new THREE.CylinderGeometry(0.08, 0.09, 0.40, 6), pants, 0, 0, 0, 0, 0, Math.PI / 2);
-    mesh(parts.legR, new THREE.CylinderGeometry(0.08, 0.09, 0.40, 6), pants, 0, 0, 0, 0, 0, Math.PI / 2);
+    // Limbs: slightly longer and attached at shoulders/hips.
+    mesh(parts.armL, new THREE.CylinderGeometry(0.07, 0.08, 0.38, 6), role === 'chef' ? 0xfdfbf7 : bodyColor, 0, 0, 0, 0, 0, Math.PI / 2);
+    mesh(parts.armR, new THREE.CylinderGeometry(0.07, 0.08, 0.38, 6), role === 'chef' ? 0xfdfbf7 : bodyColor, 0, 0, 0, 0, 0, Math.PI / 2);
+    mesh(parts.legL, new THREE.CylinderGeometry(0.08, 0.09, 0.44, 6), pants, 0, 0, 0, 0, 0, Math.PI / 2);
+    mesh(parts.legR, new THREE.CylinderGeometry(0.08, 0.09, 0.44, 6), pants, 0, 0, 0, 0, 0, Math.PI / 2);
 
-    // pose: a bit wider shoulders, narrower head, longer legs.
     parts.body.position.set(0, 0, 0);
     parts.head.position.set(0, 0, 0);
-    parts.armL.position.set(-0.24, 0.62, 0);
-    parts.armR.position.set(0.24, 0.62, 0);
-    parts.legL.position.set(-0.11, -0.22, 0);
-    parts.legR.position.set(0.11, -0.22, 0);
+    parts.armL.position.set(-0.24, 0.58, 0);
+    parts.armR.position.set(0.24, 0.58, 0);
+    parts.legL.position.set(-0.11, -0.26, 0);
+    parts.legR.position.set(0.11, -0.26, 0);
 
-    // Attach children to the root group in a centered layout.
     group.add(parts.body, parts.head, parts.armL, parts.armR, parts.legL, parts.legR);
-    group.position.set(0, 0, 0);
-    group.scale.setScalar(1.08);
+    group.scale.setScalar(1.22);
     root.add(group);
 
-    // role extras without changing silhouette too much
     if (role === 'chef') {
-      const apron = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.30, 0.03), mat(0xe8d9c2, 0.95));
-      apron.position.set(0, 0.36, 0.16);
+      const apron = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.28, 0.03), mat(0xe8d9c2, 0.95));
+      apron.position.set(0, 0.34, 0.16);
       parts.body.add(apron);
     }
 
@@ -316,50 +311,40 @@
     const eat = info.mode === 'eat';
     const idle = info.mode === 'idle';
 
-    // body and head: subtle breathing / bobbing
     if (parts.body) {
-      parts.body.rotation.z = walk ? Math.sin(t * 8 + phase) * 0.03 : 0;
-      parts.body.position.y = idle ? Math.sin(t * 2.0 + phase) * 0.015 : walk ? Math.sin(t * 8 + phase) * 0.02 : 0;
+      parts.body.rotation.z = walk ? Math.sin(t * 7 + phase) * 0.025 : 0;
+      parts.body.rotation.y = walk ? Math.sin(t * 7 + phase) * 0.015 : 0;
+      parts.body.position.y = idle ? Math.sin(t * 2.0 + phase) * 0.012 : walk ? Math.sin(t * 7 + phase) * 0.018 : 0;
     }
     if (parts.head) {
-      parts.head.rotation.z = walk ? Math.sin(t * 8 + phase + 0.35) * 0.035 : Math.sin(t * 1.2 + phase) * 0.01;
-      parts.head.rotation.x = eat ? 0.05 + Math.sin(t * 5 + phase) * 0.015 : 0;
-      parts.head.position.y = 0;
+      parts.head.rotation.z = walk ? Math.sin(t * 7 + phase + 0.35) * 0.03 : Math.sin(t * 1.2 + phase) * 0.008;
+      parts.head.rotation.x = eat ? 0.04 + Math.sin(t * 5 + phase) * 0.012 : 0;
     }
 
-    // natural walk: arms move opposite to legs
-    const stride = walk ? Math.sin(t * 8 + phase) : 0;
-    const armSwing = stride * 0.45;
-    const elbowSwing = stride * 0.18;
-    const legSwing = stride * 0.55;
-    const kneeSwing = stride * 0.20;
+    // natural walk: opposite swing for arms and legs
+    const stride = walk ? Math.sin(t * 7 + phase) : 0;
+    const armSwing = stride * 0.35;
+    const legSwing = stride * 0.48;
 
     if (parts.armL) {
       parts.armL.rotation.z = 0.08 + armSwing;
-      parts.armL.rotation.x = eat ? -0.08 : 0;
+      parts.armL.rotation.x = eat ? -0.07 : 0;
     }
     if (parts.armR) {
       parts.armR.rotation.z = -0.08 - armSwing;
-      parts.armR.rotation.x = eat ? -0.18 : 0;
+      parts.armR.rotation.x = eat ? -0.16 : 0;
     }
     if (parts.legL) {
-      parts.legL.rotation.z = 0.04 + legSwing;
-      parts.legL.rotation.x = kneeSwing * 0.1;
+      parts.legL.rotation.z = 0.05 + legSwing;
+      parts.legL.rotation.x = 0;
     }
     if (parts.legR) {
-      parts.legR.rotation.z = -0.04 - legSwing;
-      parts.legR.rotation.x = -kneeSwing * 0.1;
+      parts.legR.rotation.z = -0.05 - legSwing;
+      parts.legR.rotation.x = 0;
     }
 
-    // small upper-body counter motion makes the cycle feel less floaty.
-    if (parts.body && walk) {
-      parts.body.rotation.y = Math.sin(t * 8 + phase) * 0.02;
-    }
-
-    // texture / face adjustment for idle and eating
     if (parts.face && eat) {
-      parts.face.rotation.x = 0.08;
-      parts.face.rotation.y = 0;
+      parts.face.rotation.x = 0.04;
     } else if (parts.face) {
       parts.face.rotation.x = 0;
     }
