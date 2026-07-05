@@ -5,7 +5,7 @@
   const TARGET_TYPES = new Set(['player', 'chef', 'customer']);
   const roots = new Set();
   const state = new WeakMap();
-  const add = THREE.Object3D.prototype.add;
+  const originalAdd = THREE.Object3D.prototype.add;
   const clock = new THREE.Clock();
 
   const norm = (v) => String(v || '').trim().toLowerCase();
@@ -19,7 +19,9 @@
   };
   const rand = (seed, salt = 0) => {
     let x = (seed ^ (salt * 0x9e3779b9)) >>> 0;
-    x ^= x << 13; x ^= x >>> 17; x ^= x << 5;
+    x ^= x << 13;
+    x ^= x >>> 17;
+    x ^= x << 5;
     return (x >>> 0) / 4294967296;
   };
   const pick = (arr, seed, salt = 0) => arr[Math.floor(rand(seed, salt) * arr.length) % arr.length];
@@ -30,7 +32,6 @@
   const player = [0x4d78b5, 0x3b82f6, 0x2f6fad, 0x5f87d8];
   const customer = [0x5f7dd6, 0xd96c6c, 0x4c9b72, 0x9e78d2, 0xdb8b47, 0x5a9bdb];
   const chef = [0xf8f4eb, 0xf1eee7, 0xf6f1e7];
-
   const faceTex = new Map();
 
   function makeMat(color) {
@@ -66,62 +67,60 @@
     const mouth = role === 'chef' ? '#7f4539' : '#6d4337';
 
     ctx.clearRect(0, 0, 128, 128);
-
-    // Head base
     ctx.fillStyle = skinColor;
     ctx.fillRect(0, 0, 128, 128);
 
-    // Hair cap / hat area
+    // hair line / cap area in the texture
     ctx.fillStyle = hairColor;
-    ctx.fillRect(0, 0, 128, 34);
+    ctx.fillRect(0, 0, 128, 30);
 
     if (role === 'chef') {
       ctx.fillStyle = '#f9f9f4';
-      ctx.fillRect(14, 0, 100, 24);
-      ctx.fillRect(28, 0, 72, 32);
+      ctx.fillRect(16, 0, 96, 22);
+      ctx.fillRect(30, 0, 68, 30);
     } else if (role === 'player') {
       ctx.fillStyle = '#22314a';
-      ctx.fillRect(10, 0, 108, 24);
+      ctx.fillRect(10, 0, 108, 22);
       ctx.fillStyle = '#8ecae6';
-      ctx.fillRect(14, 18, 100, 8);
+      ctx.fillRect(14, 16, 100, 6);
     }
 
-    // Face zone
+    // face block
     ctx.fillStyle = skinColor;
-    ctx.fillRect(16, 28, 96, 88);
+    ctx.fillRect(14, 28, 100, 88);
 
-    // Eyes
+    // eyes
     ctx.fillStyle = eye;
-    ctx.fillRect(36, 54, 10, 10);
-    ctx.fillRect(82, 54, 10, 10);
+    ctx.fillRect(36, 52, 10, 10);
+    ctx.fillRect(82, 52, 10, 10);
     ctx.fillStyle = '#f5f5f5';
-    ctx.fillRect(38, 56, 3, 3);
-    ctx.fillRect(84, 56, 3, 3);
+    ctx.fillRect(38, 54, 3, 3);
+    ctx.fillRect(84, 54, 3, 3);
 
-    // Brows
+    // brows
     ctx.fillStyle = '#2b211b';
-    ctx.fillRect(34, 46, 18, 3);
-    ctx.fillRect(76, 46, 18, 3);
+    ctx.fillRect(34, 44, 18, 3);
+    ctx.fillRect(76, 44, 18, 3);
 
-    // Nose
+    // nose
     ctx.fillStyle = 'rgba(60,40,30,0.55)';
-    ctx.fillRect(61, 62, 6, 12);
+    ctx.fillRect(61, 60, 6, 10);
 
-    // Mouth
+    // mouth
     ctx.fillStyle = mouth;
     if (role === 'chef') {
-      ctx.fillRect(44, 88, 40, 4);
+      ctx.fillRect(44, 86, 40, 4);
     } else if (seed % 3 === 0) {
-      ctx.fillRect(42, 86, 44, 4);
+      ctx.fillRect(42, 84, 44, 4);
     } else {
-      ctx.fillRect(44, 84, 40, 4);
-      ctx.fillRect(46, 88, 36, 2);
+      ctx.fillRect(44, 82, 40, 4);
+      ctx.fillRect(46, 86, 36, 2);
     }
 
-    // Ears / cheeks
+    // ears
     ctx.fillStyle = skinColor;
-    ctx.fillRect(8, 48, 8, 24);
-    ctx.fillRect(112, 48, 8, 24);
+    ctx.fillRect(6, 46, 8, 24);
+    ctx.fillRect(114, 46, 8, 24);
 
     const tex = new THREE.CanvasTexture(c);
     tex.needsUpdate = true;
@@ -132,14 +131,40 @@
 
   function makeHeadMaterial(role, seed) {
     const skinColor = pick(skin, seed, 1);
+    const skinMat = makeMat(skinColor);
     const face = new THREE.MeshBasicMaterial({
       map: makeFaceTexture(role, seed),
       transparent: false,
       side: THREE.FrontSide,
     });
-    const skinMat = makeMat(skinColor);
     // BoxGeometry order: right, left, top, bottom, front, back
     return [skinMat, skinMat, skinMat, skinMat, face, skinMat];
+  }
+
+  function makeHairBlock(parent, style, color) {
+    switch (style) {
+      case 0: // short cap
+        makeBox(parent, 0.34, 0.12, 0.34, color, 0, 1.34, 0);
+        makeBox(parent, 0.30, 0.06, 0.30, color, 0, 1.39, -0.02);
+        break;
+      case 1: // side fringe
+        makeBox(parent, 0.34, 0.10, 0.34, color, 0, 1.34, 0);
+        makeBox(parent, 0.14, 0.16, 0.10, color, -0.12, 1.28, 0.10);
+        makeBox(parent, 0.12, 0.14, 0.10, color, 0.10, 1.30, 0.08);
+        break;
+      case 2: // longer top
+        makeBox(parent, 0.34, 0.12, 0.34, color, 0, 1.34, 0);
+        makeBox(parent, 0.20, 0.24, 0.18, color, 0, 1.42, 0.02);
+        break;
+      case 3: // messy top
+        makeBox(parent, 0.34, 0.10, 0.34, color, 0, 1.34, 0);
+        makeBox(parent, 0.12, 0.18, 0.10, color, -0.12, 1.40, -0.02);
+        makeBox(parent, 0.14, 0.22, 0.12, color, 0.02, 1.46, 0.00);
+        makeBox(parent, 0.10, 0.16, 0.10, color, 0.14, 1.39, 0.02);
+        break;
+      default: // bald / almost none
+        break;
+    }
   }
 
   function clearKeepSprites(root) {
@@ -157,6 +182,7 @@
     const pantsColor = pick(pants, seed, 4);
     const skinColor = pick(skin, seed, 1);
     const hairColor = pick(hair, seed, 2);
+    const hairStyle = role === 'chef' ? 0 : role === 'player' ? 0 : seed % 5;
 
     const parts = {
       body: new THREE.Group(),
@@ -168,33 +194,30 @@
       face: null,
     };
 
-    // Torso silhouette: wide shoulders -> chest -> waist -> hips.
-    makeBox(parts.body, 0.56, 0.18, 0.26, bodyColor, 0, 0.84, 0);
-    makeBox(parts.body, 0.46, 0.22, 0.26, bodyColor, 0, 0.58, 0);
-    makeBox(parts.body, 0.34, 0.20, 0.24, bodyColor, 0, 0.32, 0);
-    makeBox(parts.body, 0.40, 0.18, 0.24, pantsColor, 0, 0.08, 0);
+    // One simple Minecraft-like body block.
+    makeBox(parts.body, 0.50, 0.62, 0.26, bodyColor, 0, 0.52, 0);
+    if (role === 'chef') {
+      makeBox(parts.body, 0.22, 0.26, 0.04, 0xe8d9c2, 0, 0.34, 0.16);
+      makeBox(parts.body, 0.10, 0.03, 0.03, 0xb58b5d, 0, 0.20, 0.18);
+    }
 
-    // Head cube with face texture on the front side.
+    // Head cube with face texture on the front.
     const head = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.42, 0.42), makeHeadMaterial(role, seed));
-    head.position.set(0, 1.10, 0);
+    head.position.set(0, 1.11, 0);
     parts.head.add(head);
     parts.face = head;
 
-    // Hair / hats as separate voxel blocks.
+    // Hair / hat as simple voxel blocks.
     if (role === 'chef') {
       makeBox(parts.head, 0.34, 0.12, 0.34, 0xf9f9f4, 0, 1.36, 0);
       makeBox(parts.head, 0.18, 0.20, 0.18, 0xf9f9f4, -0.10, 1.48, 0);
       makeBox(parts.head, 0.22, 0.24, 0.22, 0xf9f9f4, 0, 1.54, 0);
       makeBox(parts.head, 0.18, 0.20, 0.18, 0xf9f9f4, 0.10, 1.48, 0);
-      makeBox(parts.body, 0.24, 0.34, 0.06, 0xe8d9c2, 0, 0.34, 0.15); // apron
-      makeBox(parts.body, 0.12, 0.03, 0.03, 0xb58b5d, 0, 0.16, 0.18); // apron tie
     } else if (role === 'player') {
       makeBox(parts.head, 0.34, 0.11, 0.34, 0x22314a, 0, 1.34, 0);
-      makeBox(parts.head, 0.36, 0.04, 0.18, 0x8ecae6, 0, 1.28, 0.14); // cap brim
+      makeBox(parts.head, 0.36, 0.04, 0.18, 0x8ecae6, 0, 1.28, 0.14);
     } else {
-      // simple voxel hair cap
-      makeBox(parts.head, 0.34, 0.12, 0.34, hairColor, 0, 1.34, 0);
-      makeBox(parts.head, 0.30, 0.06, 0.30, hairColor, 0, 1.39, -0.03);
+      if (hairStyle !== 4) makeHairBlock(parts.head, hairStyle, hairColor);
     }
 
     // Limbs: blocky and Minecraft-like.
@@ -203,7 +226,7 @@
     makeBox(parts.legL, 0.16, 0.46, 0.16, pantsColor, 0, 0, 0);
     makeBox(parts.legR, 0.16, 0.46, 0.16, pantsColor, 0, 0, 0);
 
-    // Hands / shoes can be simple blocks; keep the silhouette crisp.
+    // Small hands / shoes for readability.
     makeBox(parts.armL, 0.08, 0.08, 0.08, skinColor, 0, -0.25, 0);
     makeBox(parts.armR, 0.08, 0.08, 0.08, skinColor, 0, -0.25, 0);
     if (role !== 'chef') {
@@ -211,25 +234,16 @@
       makeBox(parts.legR, 0.14, 0.06, 0.22, 0x11151c, 0, -0.25, 0);
     }
 
-    // Pose and scale.
     parts.body.position.set(0, 0, 0);
     parts.head.position.set(0, 0, 0);
-    parts.armL.position.set(-0.32, 0.58, 0);
-    parts.armR.position.set(0.32, 0.58, 0);
+    parts.armL.position.set(-0.31, 0.44, 0);
+    parts.armR.position.set(0.31, 0.44, 0);
     parts.legL.position.set(-0.13, -0.32, 0);
     parts.legR.position.set(0.13, -0.32, 0);
 
     g.add(parts.body, parts.head, parts.armL, parts.armR, parts.legL, parts.legR);
-    g.scale.setScalar(1.35);
+    g.scale.setScalar(1.28);
     root.add(g);
-
-    if (role !== 'chef') {
-      // small shadow-ish foot if we want more readibility.
-      const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.05, 0.20), makeMat(0x11151c));
-      shoe.position.set(0, -0.28, 0.03);
-      parts.legL.add(shoe.clone());
-      parts.legR.add(shoe);
-    }
 
     return parts;
   }
@@ -252,6 +266,15 @@
     }
   }
 
+  function patchAdd() {
+    THREE.Object3D.prototype.add = function patchedAdd(...objs) {
+      for (const obj of objs) {
+        if (obj && typeof obj === 'object') attach(obj);
+      }
+      return originalAdd.apply(this, objs);
+    };
+  }
+
   function attach(root) {
     if (!root || !TARGET_TYPES.has(norm(root.userData?.type)) || root.userData.__rzVoxelBuilt) return;
     clearKeepSprites(root);
@@ -272,13 +295,6 @@
     roots.add(root);
   }
 
-  THREE.Object3D.prototype.add = function patchedAdd(...objs) {
-    for (const obj of objs) {
-      if (obj && typeof obj === 'object') attach(obj);
-    }
-    return add.apply(this, objs);
-  };
-
   function animate(parts, info) {
     const t = info.time;
     const phase = info.phase;
@@ -289,7 +305,6 @@
 
     if (parts.body) {
       parts.body.rotation.z = walk ? Math.sin(t * 7 + phase) * 0.02 : 0;
-      parts.body.rotation.y = walk ? Math.sin(t * 7 + phase) * 0.012 : 0;
       parts.body.position.y = idle ? Math.sin(t * 2.0 + phase) * 0.012 : walk ? Math.sin(t * 7 + phase) * 0.016 : 0;
     }
     if (parts.head) {
@@ -297,16 +312,30 @@
       parts.head.rotation.x = eat ? 0.04 + Math.sin(t * 5 + phase) * 0.012 : 0;
     }
 
+    // Rotate limbs around X for Minecraft-like forward/back swing.
     if (parts.armL) {
-      parts.armL.rotation.z = 0.08 + stride * 0.38;
-      parts.armL.rotation.x = eat ? -0.06 : 0;
+      parts.armL.rotation.x = 0.12 + stride * 0.75;
+      parts.armL.rotation.z = 0;
     }
     if (parts.armR) {
-      parts.armR.rotation.z = -0.08 - stride * 0.38;
-      parts.armR.rotation.x = eat ? -0.14 : 0;
+      parts.armR.rotation.x = -0.12 - stride * 0.75;
+      parts.armR.rotation.z = 0;
     }
-    if (parts.legL) parts.legL.rotation.z = 0.05 + stride * 0.5;
-    if (parts.legR) parts.legR.rotation.z = -0.05 - stride * 0.5;
+    if (parts.legL) {
+      parts.legL.rotation.x = -0.08 - stride * 0.85;
+      parts.legL.rotation.z = 0;
+    }
+    if (parts.legR) {
+      parts.legR.rotation.x = 0.08 + stride * 0.85;
+      parts.legR.rotation.z = 0;
+    }
+
+    if (eat) {
+      if (parts.armR) parts.armR.rotation.x = -1.05;
+      if (parts.armL) parts.armL.rotation.x = -0.20;
+      if (parts.body) parts.body.rotation.x = 0.10;
+      if (parts.head) parts.head.rotation.x += 0.06;
+    }
 
     if (parts.face && parts.face.material && parts.face.material.map) {
       parts.face.material.map.needsUpdate = true;
@@ -329,5 +358,9 @@
     requestAnimationFrame(tick);
   }
 
+  patchAdd();
+  // Re-apply after any later bootstrap script overwrites Object3D.add.
+  setTimeout(patchAdd, 0);
+  requestAnimationFrame(() => setTimeout(patchAdd, 0));
   requestAnimationFrame(tick);
 })();
