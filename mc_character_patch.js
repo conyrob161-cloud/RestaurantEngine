@@ -131,7 +131,7 @@
     const faceMat = new THREE.MeshBasicMaterial({ map: makeFaceTexture(role, seed), transparent: false, side: THREE.FrontSide });
 
     const visual = new THREE.Group();
-    visual.position.y = 0.14;
+    visual.position.y = 0.30;
     root.add(visual);
 
     const body = new THREE.Group();
@@ -140,66 +140,66 @@
 
     const head = new THREE.Group();
     const headCube = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.42, 0.42), [skinMat.clone(), skinMat.clone(), skinMat.clone(), skinMat.clone(), faceMat, skinMat.clone()]);
-    headCube.position.y = 1.16;
+    headCube.position.y = 1.22;
     head.add(headCube);
 
     if (role === 'chef') {
-      box(head, 0.34, 0.12, 0.34, 0xffffff, 0, 1.46, 0);
-      box(head, 0.16, 0.20, 0.16, 0xffffff, -0.10, 1.58, 0);
-      box(head, 0.20, 0.24, 0.20, 0xffffff, 0, 1.66, 0);
-      box(head, 0.16, 0.20, 0.16, 0xffffff, 0.10, 1.58, 0);
+      box(head, 0.34, 0.12, 0.34, 0xffffff, 0, 1.52, 0);
+      box(head, 0.16, 0.20, 0.16, 0xffffff, -0.10, 1.64, 0);
+      box(head, 0.20, 0.24, 0.20, 0xffffff, 0, 1.72, 0);
+      box(head, 0.16, 0.20, 0.16, 0xffffff, 0.10, 1.64, 0);
       box(body, 0.22, 0.28, 0.04, 0xe8d9c2, 0, 0.34, 0.15);
       box(body, 0.10, 0.03, 0.03, 0xb58b5d, 0, 0.20, 0.18);
     } else if (role === 'player') {
-      box(head, 0.34, 0.12, 0.28, 0x24324c, 0, 1.44, 0);
-      box(head, 0.38, 0.05, 0.18, 0x8ecae6, 0, 1.38, 0.14);
+      box(head, 0.34, 0.12, 0.28, 0x24324c, 0, 1.50, 0);
+      box(head, 0.38, 0.05, 0.18, 0x8ecae6, 0, 1.44, 0.14);
     } else {
       const style = seed % 4;
       if (style === 0) {
-        box(head, 0.34, 0.12, 0.34, hairColor, 0, 1.40, 0);
-        box(head, 0.28, 0.08, 0.28, hairColor, 0, 1.46, -0.02);
+        box(head, 0.34, 0.12, 0.34, hairColor, 0, 1.46, 0);
+        box(head, 0.28, 0.08, 0.28, hairColor, 0, 1.52, -0.02);
       } else if (style === 1) {
-        box(head, 0.34, 0.10, 0.34, hairColor, 0, 1.40, 0);
-        box(head, 0.14, 0.16, 0.10, hairColor, -0.12, 1.34, 0.10);
-        box(head, 0.12, 0.14, 0.10, hairColor, 0.10, 1.36, 0.08);
+        box(head, 0.34, 0.10, 0.34, hairColor, 0, 1.46, 0);
+        box(head, 0.14, 0.16, 0.10, hairColor, -0.12, 1.40, 0.10);
+        box(head, 0.12, 0.14, 0.10, hairColor, 0.10, 1.42, 0.08);
       } else if (style === 2) {
-        box(head, 0.34, 0.12, 0.34, hairColor, 0, 1.40, 0);
-        box(head, 0.20, 0.22, 0.18, hairColor, 0, 1.50, 0.02);
+        box(head, 0.34, 0.12, 0.34, hairColor, 0, 1.46, 0);
+        box(head, 0.20, 0.22, 0.18, hairColor, 0, 1.56, 0.02);
       } else {
-        box(head, 0.34, 0.10, 0.34, hairColor, 0, 1.40, 0);
-        box(head, 0.12, 0.16, 0.10, hairColor, -0.12, 1.46, -0.02);
-        box(head, 0.14, 0.20, 0.12, hairColor, 0.02, 1.52, 0);
-        box(head, 0.10, 0.16, 0.10, hairColor, 0.14, 1.45, 0.02);
+        box(head, 0.34, 0.10, 0.34, hairColor, 0, 1.46, 0);
+        box(head, 0.12, 0.16, 0.10, hairColor, -0.12, 1.52, -0.02);
+        box(head, 0.14, 0.20, 0.12, hairColor, 0.02, 1.58, 0);
+        box(head, 0.10, 0.16, 0.10, hairColor, 0.14, 1.51, 0.02);
       }
     }
     visual.add(head);
 
     const armL = new THREE.Group();
     box(armL, 0.14, 0.52, 0.14, skinColor, 0, -0.26, 0);
-    armL.position.set(-0.30, 0.98, 0);
+    armL.position.set(-0.30, 1.02, 0);
     visual.add(armL);
 
     const armR = new THREE.Group();
     box(armR, 0.14, 0.52, 0.14, skinColor, 0, -0.26, 0);
-    armR.position.set(0.30, 0.98, 0);
+    armR.position.set(0.30, 1.02, 0);
     visual.add(armR);
 
     const legL = new THREE.Group();
     box(legL, 0.16, 0.60, 0.16, role === 'chef' ? 0x1f1f1f : 0x1d2230, 0, -0.30, 0);
     box(legL, 0.20, 0.06, 0.30, role === 'chef' ? 0x1f1f1f : 0x11151c, 0, -0.56, 0.05);
-    legL.position.set(-0.13, 0.31, 0);
+    legL.position.set(-0.13, 0.37, 0);
     visual.add(legL);
 
     const legR = new THREE.Group();
     box(legR, 0.16, 0.60, 0.16, role === 'chef' ? 0x1f1f1f : 0x1d2230, 0, -0.30, 0);
     box(legR, 0.20, 0.06, 0.30, role === 'chef' ? 0x1f1f1f : 0x11151c, 0, -0.56, 0.05);
-    legR.position.set(0.13, 0.31, 0);
+    legR.position.set(0.13, 0.37, 0);
     visual.add(legR);
 
     root.bodyMat = bodyMat;
     root.headMat = skinMat;
     root.parts = { visual, body, head, armL, armR, legL, legR };
-    root.scale.setScalar(role === 'customer' ? 0.95 : 1.06);
+    root.scale.setScalar(role === 'customer' ? 1.04 : 1.14);
     root.userData.__mcBuilt = true;
 
     if (role === 'customer') {
@@ -242,7 +242,7 @@
     const idleBob = Math.sin(t * 2 + phase) * 0.01;
     const stride = moving ? Math.sin(t * 7 + phase) : Math.sin(t * 1.8 + phase) * 0.12;
 
-    if (parts.visual) parts.visual.position.y = 0.14 + idleBob;
+    if (parts.visual) parts.visual.position.y = 0.30 + idleBob;
     if (parts.body) {
       parts.body.rotation.z = moving ? Math.sin(t * 7 + phase) * 0.015 : 0;
       parts.body.position.y = idleBob * 0.5;
