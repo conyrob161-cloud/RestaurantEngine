@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Meshy Viewer</title>
+  <style>
+    :root { color-scheme: dark; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #08111f; color: #e5e7eb; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    canvas { display: block; width: 100%; height: 100%; }
+    .hud { position: fixed; inset: 0; pointer-events: none; display: flex; justify-content: space-between; align-items: flex-start; padding: 14px; box-sizing: border-box; }
+    .card { pointer-events: auto; width: min(520px, calc(100vw - 28px)); background: rgba(8, 17, 31, 0.78); border: 1px solid rgba(255,255,255,0.10); border-radius: 18px; box-shadow: 0 16px 50px rgba(0,0,0,0.32); backdrop-filter: blur(8px); padding: 14px; }
+    h1 { margin: 0 0 6px; font-size: 22px; }
+    .small { color: #cbd5e1; font-size: 13px; line-height: 1.45; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    button { pointer-events: auto; appearance: none; border: 0; border-radius: 999px; padding: 10px 14px; background: #2563eb; color: #fff; font-weight: 800; cursor: pointer; }
+    button.secondary { background: rgba(255,255,255,0.10); }
+    .status { position: fixed; left: 14px; right: 14px; bottom: 14px; background: rgba(8, 17, 31, 0.82); border: 1px solid rgba(255,255,255,0.10); border-radius: 18px; backdrop-filter: blur(8px); box-shadow: 0 16px 50px rgba(0,0,0,0.32); padding: 12px 14px; box-sizing: border-box; font-size: 13px; line-height: 1.45; }
+    .ok { color: #86efac; }
+    .err { color: #fca5a5; }
+    pre { margin: 8px 0 0; white-space: pre-wrap; word-break: break-word; max-height: 34vh; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  </style>
+</head>
+<body>
+  <div class="hud">
+    <div class="card">
+      <h1>Meshy viewer</h1>
+      <div class="small">Levý drag = otáčení. Kolečko / pinch = zoom. Pravý drag / dva prsty = posun kamery. Cíl: načíst a zobrazit <code>Meshy_AI_Meshy_Merged_Animations.glb</code>.</div>
+      <div class="row">
+        <button id="resetBtn">Reset kamery</button>
+        <button id="toggleAnimBtn" class="secondary">Animace: zap.</button>
+      </div>
+    </div>
+  </div>
+  <div class="status" id="status">Startuji…<pre id="log"></pre></div>
+
+  <script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+    import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
+    import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+
+    const MODEL = 'Meshy_AI_Meshy_Merged_Animations.glb';
+    const URLS = [
+      new URL(`./${MODEL}`, window.location.href).href,
+      new URL(MODEL, window.location.href).href,
+      `${window.location.origin}/RestaurantEngine/${MODEL}`,
+      `${window.location.origin}/RestaurantEngine/docs/${MODEL}`,
+    ];
+
+    const status = document.getElementById('status');
+    const logEl = document.getElementById('log');
+    const resetBtn = document.getElementById('resetBtn');
+    const toggleAnimBtn = document.getElementById('toggleAnimBtn');
+
+    const lines = [];
+    const log = (line) => { lines.push(line); logEl.textContent = lines.join('\n'); };
+    const setStatus = (text, cls = '') => {
+      status.className = 'status' + (cls ? ` ${cls}` : '');
+      status.firstChild && (status.firstChild.nodeValue = text + '\n');
+    };
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x08111f);
+    scene.fog = new THREE.Fog(0x08111f, 8, 30);
+
+    const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.01, 2000);
+    camera.position.set(2.5, 1.8, 3.5);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    document.body.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.enablePan = true;
+    controls.minDistance = 0.35;
+    controls.maxDistance = 30;
+
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x1d3557, 1.5));
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.4);
+    keyLight.position.set(4, 6, 5);
+    scene.add(keyLight);
+    const fillLight = new THREE.DirectionalLight(0xffddb3, 0.8);
+    fillLight.position.set(-5, 2, -4);
+    scene.add(fillLight);
+
+    const ground = new THREE.Mesh(
+      new THREE.CircleGeometry(8, 48),
+      new THREE.MeshStandardMaterial({ color: 0x172131, roughness: 1, metalness: 0 })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -0.001;
+    scene.add(ground);
+    scene.add(new THREE.GridHelper(16, 16, 0x31415e, 0x24324a));
+
+    const loader = new GLTFLoader();
+    const clock = new THREE.Clock();
+    let mixer = null;
+    let root = null;
+    let animEnabled = true;
+    let baseBox = null;
+
+    function disposeModel(obj) {
+      if (!obj) return;
+      obj.traverse((node) => {
+        if (!node.isMesh) return;
+        node.geometry?.dispose?.();
+        if (Array.isArray(node.material)) node.material.forEach((m) => m.dispose?.());
+        else node.material?.dispose?.();
+      });
+    }
+
+    function clearModel() {
+      if (root) scene.remove(root);
+      disposeModel(root);
+      root = null;
+      mixer = null;
+    }
+
+    function frame(object3d) {
+      const box = new THREE.Box3().setFromObject(object3d);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      const scale = 2.15 / Math.max(size.x, size.y, size.z, 0.001);
+      object3d.scale.setScalar(scale);
+      object3d.position.sub(center).multiplyScalar(scale);
+      object3d.position.y -= new THREE.Box3().setFromObject(object3d).min.y;
+      baseBox = new THREE.Box3().setFromObject(object3d);
+      const c = baseBox.getCenter(new THREE.Vector3());
+      controls.target.set(c.x, Math.max(0.75, baseBox.min.y + (baseBox.max.y - baseBox.min.y) * 0.45), c.z);
+      camera.position.set(c.x + 2.4, c.y + 1.5, c.z + 3.6);
+      controls.update();
+    }
+
+    function countNodes(obj) {
+      let nodes = 0, meshes = 0, skinned = 0, bones = 0;
+      obj.traverse((n) => {
+        nodes += 1;
+        if (n.isMesh) meshes += 1;
+        if (n.isSkinnedMesh) skinned += 1;
+        if (n.isBone) bones += 1;
+      });
+      return { nodes, meshes, skinned, bones };
+    }
+
+    function loadNext(i = 0) {
+      if (i >= URLS.length) {
+        setStatus('Nepodařilo se model načíst.', 'err');
+        log('Všechny cesty selhaly.');
+        return;
+      }
+
+      const url = URLS[i];
+      log(`→ ${url}`);
+      setStatus(`Zkouším ${i + 1}/${URLS.length}…`);
+
+      loader.load(
+        url,
+        (gltf) => {
+          clearModel();
+          root = gltf.scene;
+          root.traverse((node) => {
+            if (node.isMesh) {
+              node.castShadow = true;
+              node.receiveShadow = true;
+            }
+          });
+          scene.add(root);
+          frame(root);
+
+          const counts = countNodes(root);
+          log(`  nodes: ${counts.nodes}`);
+          log(`  meshes: ${counts.meshes}`);
+          log(`  skinned: ${counts.skinned}`);
+          log(`  bones: ${counts.bones}`);
+          log(`  animations: ${(gltf.animations || []).length}`);
+
+          if (gltf.animations?.length) {
+            mixer = new THREE.AnimationMixer(root);
+            const clip = gltf.animations.find((a) => /idle/i.test(a.name || '')) || gltf.animations[0];
+            mixer.clipAction(clip).play();
+            log(`  clip: ${clip.name || '(unnamed)'}`);
+          }
+
+          setStatus(`Načteno z ${url}`, 'ok');
+        },
+        undefined,
+        (err) => {
+          log(`  error: ${err?.message || err}`);
+          loadNext(i + 1);
+        }
+      );
+    }
+
+    resetBtn.addEventListener('click', () => {
+      if (!baseBox) return;
+      const center = baseBox.getCenter(new THREE.Vector3());
+      controls.target.copy(center);
+      camera.position.set(center.x + 2.4, center.y + 1.5, center.z + 3.6);
+      controls.update();
+    });
+
+    toggleAnimBtn.addEventListener('click', () => {
+      animEnabled = !animEnabled;
+      toggleAnimBtn.textContent = `Animace: ${animEnabled ? 'zap.' : 'vyp.'}`;
+    });
+
+    addEventListener('resize', () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+
+    loadNext(0);
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = clock.getDelta();
+      if (mixer && animEnabled) mixer.update(dt);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
+</body>
+</html>
