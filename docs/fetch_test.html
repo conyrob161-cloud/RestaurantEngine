@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>GLB Fetch Test</title>
+  <style>
+    :root { color-scheme: dark; }
+    html, body { margin: 0; width: 100%; height: 100%; background: #0f172a; color: #e5e7eb; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    .wrap { min-height: 100%; box-sizing: border-box; padding: 18px; display: grid; place-items: start center; }
+    .panel { width: min(760px, 100%); background: rgba(15, 23, 42, 0.88); border: 1px solid rgba(255,255,255,0.10); border-radius: 20px; padding: 18px; box-shadow: 0 16px 50px rgba(0,0,0,0.3); }
+    h1 { margin: 0 0 8px; font-size: 28px; line-height: 1.1; }
+    p { margin: 8px 0; color: #cbd5e1; }
+    .btns { display: flex; gap: 10px; flex-wrap: wrap; margin: 16px 0 12px; }
+    button { border: 0; border-radius: 999px; padding: 10px 14px; font-weight: 800; background: #2563eb; color: white; cursor: pointer; }
+    button.secondary { background: rgba(255,255,255,0.10); }
+    .status { margin-top: 14px; padding: 14px; border-radius: 16px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); }
+    .ok { color: #86efac; }
+    .err { color: #fca5a5; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    pre { white-space: pre-wrap; word-break: break-word; margin: 10px 0 0; max-height: 55vh; overflow: auto; }
+    .muted { color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="panel">
+      <h1>GLB fetch test</h1>
+      <p>Bez Three.js. Jen stáhne <code>Meshy_AI_Meshy_Merged_Animations.glb</code> a ukáže, co vrátí server.</p>
+      <div class="btns">
+        <button id="runBtn">Spustit test</button>
+        <button id="copyBtn" class="secondary">Zkopírovat log</button>
+      </div>
+      <div class="status">
+        <div id="headline" class="muted">Čekám na spuštění…</div>
+        <pre id="log">Klikni na „Spustit test“.</pre>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const FILE = 'Meshy_AI_Meshy_Merged_Animations.glb';
+    const URLS = [
+      new URL(FILE, window.location.href).href,
+      new URL('./' + FILE, window.location.href).href,
+      `${window.location.origin}/RestaurantEngine/${FILE}`,
+      `${window.location.origin}/RestaurantEngine/docs/${FILE}`,
+    ];
+
+    const runBtn = document.getElementById('runBtn');
+    const copyBtn = document.getElementById('copyBtn');
+    const headline = document.getElementById('headline');
+    const logEl = document.getElementById('log');
+
+    const lines = [];
+    const write = (line) => {
+      lines.push(line);
+      logEl.textContent = lines.join('\n');
+    };
+    const setHeadline = (text, cls = 'muted') => {
+      headline.className = cls;
+      headline.textContent = text;
+    };
+
+    async function testUrl(url) {
+      write(`→ ${url}`);
+      const res = await fetch(url, { cache: 'no-store' });
+      write(`  HTTP: ${res.status} ${res.statusText || ''}`.trim());
+      write(`  content-type: ${res.headers.get('content-type') || '(none)'}`);
+      write(`  content-length: ${res.headers.get('content-length') || '(none)'}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const buf = await res.arrayBuffer();
+      write(`  bytes: ${buf.byteLength}`);
+      const head = new Uint8Array(buf.slice(0, 12));
+      const asText = String.fromCharCode(...head);
+      write(`  first-bytes: ${Array.from(head).map((b) => b.toString(16).padStart(2, '0')).join(' ')}`);
+      write(`  ascii-head: ${JSON.stringify(asText)}`);
+      const dv = new DataView(buf);
+      const magic = String.fromCharCode(dv.getUint8(0), dv.getUint8(1), dv.getUint8(2), dv.getUint8(3));
+      write(`  magic: ${magic}`);
+      return { res, buf };
+    }
+
+    async function run() {
+      lines.length = 0;
+      logEl.textContent = '';
+      setHeadline('Spouštím diagnostiku…', 'muted');
+      for (let i = 0; i < URLS.length; i++) {
+        const url = URLS[i];
+        try {
+          setHeadline(`Testuji ${i + 1}/${URLS.length}…`, 'muted');
+          const out = await testUrl(url);
+          if (out && out.buf && out.buf.byteLength) {
+            const magic = String.fromCharCode(new Uint8Array(out.buf, 0, 4)[0], new Uint8Array(out.buf, 0, 4)[1], new Uint8Array(out.buf, 0, 4)[2], new Uint8Array(out.buf, 0, 4)[3]);
+            if (magic !== 'glTF') write('  upozornění: magic není glTF');
+          }
+          setHeadline(`Hotovo: ${url}`, 'ok');
+          return;
+        } catch (err) {
+          write(`  error: ${err && err.message ? err.message : err}`);
+        }
+      }
+      setHeadline('Všechny cesty selhaly.', 'err');
+      write('Všechny cesty selhaly.');
+    }
+
+    runBtn.addEventListener('click', run);
+    copyBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(lines.join('\n'));
+        setHeadline('Log zkopírován.', 'ok');
+      } catch {
+        setHeadline('Kopírování selhalo.', 'err');
+      }
+    });
+  </script>
+</body>
+</html>
