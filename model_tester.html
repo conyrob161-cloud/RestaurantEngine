@@ -7,38 +7,14 @@
   <style>
     html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #0f172a; color: #fff; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
     canvas { display: block; width: 100%; height: 100%; }
-    .hud {
-      position: fixed; inset: 0; pointer-events: none;
-      display: flex; align-items: flex-start; justify-content: space-between;
-      padding: 14px; box-sizing: border-box;
-    }
-    .card {
-      pointer-events: auto;
-      background: rgba(15, 23, 42, 0.72);
-      backdrop-filter: blur(8px);
-      border: 1px solid rgba(255,255,255,0.12);
-      border-radius: 18px;
-      padding: 12px 14px;
-      box-shadow: 0 14px 40px rgba(0,0,0,0.25);
-      max-width: min(460px, calc(100vw - 28px));
-    }
+    .hud { position: fixed; inset: 0; pointer-events: none; display: flex; align-items: flex-start; justify-content: space-between; padding: 14px; box-sizing: border-box; }
+    .card { pointer-events: auto; background: rgba(15, 23, 42, 0.72); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.12); border-radius: 18px; padding: 12px 14px; box-shadow: 0 14px 40px rgba(0,0,0,0.25); max-width: min(460px, calc(100vw - 28px)); }
     .title { font-weight: 800; font-size: 18px; margin-bottom: 6px; }
     .small { opacity: 0.85; font-size: 13px; line-height: 1.45; }
     .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
-    button {
-      pointer-events: auto;
-      appearance: none; border: 0; border-radius: 999px; padding: 10px 14px;
-      background: #2563eb; color: white; font-weight: 700; cursor: pointer;
-    }
+    button { pointer-events: auto; appearance: none; border: 0; border-radius: 999px; padding: 10px 14px; background: #2563eb; color: white; font-weight: 700; cursor: pointer; }
     button.secondary { background: rgba(255,255,255,0.10); }
-    .status {
-      position: fixed; left: 14px; right: 14px; bottom: 14px;
-      background: rgba(15, 23, 42, 0.72); backdrop-filter: blur(8px);
-      border: 1px solid rgba(255,255,255,0.12); border-radius: 18px;
-      padding: 10px 12px; box-sizing: border-box;
-      font-size: 13px; line-height: 1.4;
-      display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
-    }
+    .status { position: fixed; left: 14px; right: 14px; bottom: 14px; background: rgba(15, 23, 42, 0.72); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.12); border-radius: 18px; padding: 10px 12px; box-sizing: border-box; font-size: 13px; line-height: 1.4; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
     .err { color: #fca5a5; }
     .ok { color: #86efac; }
   </style>
@@ -47,11 +23,7 @@
   <div class="hud">
     <div class="card">
       <div class="title">Meshy GLB tester</div>
-      <div class="small">
-        Levé tlačítko myši / prst = otáčení.<br>
-        Kolečko / pinch = zoom.<br>
-        Pravé tlačítko / dva prsty = posun kamery.
-      </div>
+      <div class="small">Levý drag = otáčení. Kolečko / pinch = zoom. Pravý drag / dva prsty = posun kamery.</div>
       <div class="row">
         <button id="resetBtn">Reset kamery</button>
         <button id="toggleAnimBtn" class="secondary">Animace: zap.</button>
@@ -98,14 +70,10 @@
     fillLight.position.set(-4, 2, -3);
     scene.add(fillLight);
 
-    const ground = new THREE.Mesh(
-      new THREE.CircleGeometry(8, 48),
-      new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 1, metalness: 0 })
-    );
+    const ground = new THREE.Mesh(new THREE.CircleGeometry(8, 48), new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 1, metalness: 0 }));
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -0.001;
     scene.add(ground);
-
     const grid = new THREE.GridHelper(16, 16, 0x31415e, 0x263244);
     grid.position.y = 0.001;
     scene.add(grid);
@@ -116,6 +84,14 @@
     let modelRoot = null;
     let animEnabled = true;
     let baseBox = null;
+
+    const MODEL_URLS = [
+      new URL('Meshy_AI_Meshy_Merged_Animations.glb', window.location.href).href,
+      `${window.location.origin}/RestaurantEngine/Meshy_AI_Meshy_Merged_Animations.glb`,
+      new URL('./Meshy_AI_Meshy_Merged_Animations.glb', window.location.href).href,
+      new URL('../Meshy_AI_Meshy_Merged_Animations.glb', window.location.href).href,
+      new URL('../../Meshy_AI_Meshy_Merged_Animations.glb', window.location.href).href,
+    ];
 
     function setStatus(msg, cls = '') {
       statusEl.className = 'status';
@@ -129,48 +105,47 @@
       const center = box.getCenter(new THREE.Vector3());
       const maxDim = Math.max(size.x, size.y, size.z, 0.001);
       const scale = 2.0 / maxDim;
-
       object3d.scale.setScalar(scale);
       object3d.position.sub(center);
       object3d.position.multiplyScalar(scale);
       object3d.position.y -= new THREE.Box3().setFromObject(object3d).min.y;
-
-      const finalBox = new THREE.Box3().setFromObject(object3d);
-      baseBox = finalBox;
-      const finalCenter = finalBox.getCenter(new THREE.Vector3());
-      controls.target.set(finalCenter.x, Math.max(0.8, finalBox.min.y + (finalBox.max.y - finalBox.min.y) * 0.45), finalCenter.z);
+      baseBox = new THREE.Box3().setFromObject(object3d);
+      const finalCenter = baseBox.getCenter(new THREE.Vector3());
+      controls.target.set(finalCenter.x, Math.max(0.8, baseBox.min.y + (baseBox.max.y - baseBox.min.y) * 0.45), finalCenter.z);
       camera.position.set(finalCenter.x + 2.5, finalCenter.y + 1.6, finalCenter.z + 3.5);
       controls.update();
     }
 
     function clearModel() {
-      if (modelRoot) {
-        scene.remove(modelRoot);
-        modelRoot.traverse((obj) => {
-          if (obj.isMesh) {
-            obj.geometry?.dispose?.();
-            if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose?.());
-            else obj.material?.dispose?.();
-          }
-        });
-      }
+      if (!modelRoot) return;
+      scene.remove(modelRoot);
+      modelRoot.traverse((obj) => {
+        if (!obj.isMesh) return;
+        obj.geometry?.dispose?.();
+        if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose?.());
+        else obj.material?.dispose?.();
+      });
       modelRoot = null;
       mixer = null;
     }
 
-    function loadModel() {
-      clearModel();
-      setStatus('Načítám model Meshy_AI_Meshy_Merged_Animations.glb…');
+    function loadFromIndex(i) {
+      if (i >= MODEL_URLS.length) {
+        setStatus('Nepodařilo se načíst model. Zkusil jsem všechny cesty a všechny selhaly.', 'err');
+        return;
+      }
+      const url = MODEL_URLS[i];
+      setStatus(`Načítám model… (${i + 1}/${MODEL_URLS.length}) ${url}`);
       loader.load(
-        'Meshy_AI_Meshy_Merged_Animations.glb',
+        url,
         (gltf) => {
+          clearModel();
           modelRoot = gltf.scene;
           modelRoot.name = 'meshy-root';
           modelRoot.traverse((obj) => {
             if (obj.isMesh) {
               obj.castShadow = true;
               obj.receiveShadow = true;
-              if (obj.material) obj.material.side = THREE.FrontSide;
             }
           });
           scene.add(modelRoot);
@@ -187,8 +162,8 @@
         },
         undefined,
         (err) => {
-          console.error(err);
-          setStatus('Nepodařilo se načíst model. Zkontroluj název souboru a jestli je v rootu repozitáře.', 'err');
+          console.warn(`Load failed for ${url}`, err);
+          loadFromIndex(i + 1);
         }
       );
     }
@@ -213,7 +188,7 @@
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    loadModel();
+    loadFromIndex(0);
 
     function animate() {
       requestAnimationFrame(animate);
