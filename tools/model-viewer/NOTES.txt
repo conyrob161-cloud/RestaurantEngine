@@ -1,0 +1,4 @@
+Model Viewer ready.
+
+Open /tools/model-viewer/index.html or /model-viewer.html.
+Use the file picker or ?model=URL to load a GLB/GLTF.
