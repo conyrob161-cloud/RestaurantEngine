@@ -70,8 +70,12 @@
 
   function attachChefModel(root, gltf) {
     if (!root || root.userData.__chefModelApplied) return;
-    root.userData.__chefModelApplied = true;
+
+    // Change the type before touching children so mc_character_patch no longer rebuilds it.
     root.userData.type = 'chef3d';
+    root.userData.__chefModelApplied = true;
+    root.userData.__mcBuilt = true;
+    root.visible = false;
 
     while (root.children.length) root.remove(root.children[0]);
 
@@ -97,6 +101,8 @@
       action.play();
       mixers.push(mixer);
     }
+
+    root.visible = true;
   }
 
   function applyToScene(scene) {
