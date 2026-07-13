@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0b1020" />
+  <title>Model Viewer</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+  <div id="app">
+    <div id="viewport"></div>
+
+    <div id="panel">
+      <div class="head">
+        <div>
+          <div class="kicker">RestaurantEngine</div>
+          <h1>3D Model Viewer</h1>
+          <p>Načti GLB/GLTF, prohlédni animace, skeleton, materiály a statistiky.</p>
+        </div>
+      </div>
+
+      <div class="section">
+        <label class="file">
+          <span>Otevřít soubor</span>
+          <input id="fileInput" type="file" accept=".glb,.gltf,.bin,.jpg,.jpeg,.png,.webp" />
+        </label>
+        <div class="row">
+          <button id="btnReset" type="button">Reset kamery</button>
+          <button id="btnCenter" type="button">Vycentrovat</button>
+        </div>
+        <div class="row">
+          <button id="btnPlay" class="good" type="button">Play</button>
+          <button id="btnPause" class="warn" type="button">Pause</button>
+        </div>
+        <div class="speed">
+          <span id="speedLabel">Speed 1.0×</span>
+          <input id="speed" type="range" min="0.1" max="3" step="0.1" value="1" />
+        </div>
+      </div>
+
+      <div class="section switches">
+        <label><input id="chkGrid" type="checkbox" checked /> Grid</label>
+        <label><input id="chkAxes" type="checkbox" /> Axes</label>
+        <label><input id="chkWire" type="checkbox" /> Wireframe</label>
+        <label><input id="chkSkeleton" type="checkbox" /> Skeleton</label>
+        <label><input id="chkAutoRotate" type="checkbox" /> Auto-rotate</label>
+        <label><input id="chkEnv" type="checkbox" checked /> Light rig</label>
+      </div>
+
+      <div class="section stats">
+        <div><span>Meshes</span><b id="stMeshes">0</b></div>
+        <div><span>Materials</span><b id="stMats">0</b></div>
+        <div><span>Vertices</span><b id="stVerts">0</b></div>
+        <div><span>Triangles</span><b id="stFaces">0</b></div>
+        <div><span>Bones</span><b id="stBones">0</b></div>
+        <div><span>Animations</span><b id="stClips">0</b></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Animace</div>
+        <div id="clipList" class="clip-list"><div class="empty">Zatím žádná animace.</div></div>
+      </div>
+
+      <div class="section small">
+        Tip: model můžeš i přetáhnout do okna. LMB = otočení, RMB = posun, kolečko = zoom.
+      </div>
+    </div>
+
+    <div id="status">Připraveno</div>
+    <div id="dropHint">Pusť sem .GLB nebo .GLTF</div>
+  </div>
+
+  <script src="main.js"></script>
+</body>
+</html>
