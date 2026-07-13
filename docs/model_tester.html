@@ -85,6 +85,14 @@
     let animEnabled = true;
     let baseBox = null;
 
+    const MODEL_URLS = [
+      new URL('Meshy_AI_Meshy_Merged_Animations.glb', window.location.href).href,
+      `${window.location.origin}/RestaurantEngine/Meshy_AI_Meshy_Merged_Animations.glb`,
+      new URL('./Meshy_AI_Meshy_Merged_Animations.glb', window.location.href).href,
+      new URL('../Meshy_AI_Meshy_Merged_Animations.glb', window.location.href).href,
+      new URL('../../Meshy_AI_Meshy_Merged_Animations.glb', window.location.href).href,
+    ];
+
     function setStatus(msg, cls = '') {
       statusEl.className = 'status';
       if (cls) statusEl.classList.add(cls);
@@ -121,13 +129,19 @@
       mixer = null;
     }
 
-    function loadModel() {
-      clearModel();
-      setStatus('Načítám model Meshy_AI_Meshy_Merged_Animations.glb…');
+    function loadFromIndex(i) {
+      if (i >= MODEL_URLS.length) {
+        setStatus('Nepodařilo se načíst model. Zkusil jsem všechny cesty a všechny selhaly.', 'err');
+        return;
+      }
+      const url = MODEL_URLS[i];
+      setStatus(`Načítám model… (${i + 1}/${MODEL_URLS.length}) ${url}`);
       loader.load(
-        'Meshy_AI_Meshy_Merged_Animations.glb',
+        url,
         (gltf) => {
+          clearModel();
           modelRoot = gltf.scene;
+          modelRoot.name = 'meshy-root';
           modelRoot.traverse((obj) => {
             if (obj.isMesh) {
               obj.castShadow = true;
@@ -136,6 +150,7 @@
           });
           scene.add(modelRoot);
           frameModel(modelRoot);
+
           if (Array.isArray(gltf.animations) && gltf.animations.length) {
             mixer = new THREE.AnimationMixer(modelRoot);
             const clip = gltf.animations.find((a) => /idle/i.test(a.name || '')) || gltf.animations[0];
@@ -147,8 +162,8 @@
         },
         undefined,
         (err) => {
-          console.error(err);
-          setStatus('Nepodařilo se načíst model. Zkontroluj název souboru a jestli je v rootu repozitáře.', 'err');
+          console.warn(`Load failed for ${url}`, err);
+          loadFromIndex(i + 1);
         }
       );
     }
@@ -173,7 +188,8 @@
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    loadModel();
+    loadFromIndex(0);
+
     function animate() {
       requestAnimationFrame(animate);
       const dt = mixerClock.getDelta();
