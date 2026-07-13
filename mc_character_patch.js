@@ -8,6 +8,8 @@
   const originalAdd = THREE.Object3D.prototype.add;
   const clock = new THREE.Clock();
   const tmpPos = new THREE.Vector3();
+  const chefLoader = new THREE.GLTFLoader();
+  const chefModelPromiseCache = new Map();
 
   const norm = (v) => String(v || '').trim().toLowerCase();
   const hash = (text) => {
@@ -36,7 +38,6 @@
   const pants = [0x1d2230, 0x22262d, 0x272a31, 0x2c2f35, 0x1b1f28];
   const player = [0x4d78b5, 0x3b82f6, 0x2f6fad, 0x5f87d8];
   const customer = [0x5f7dd6, 0xd96c6c, 0x4c9b72, 0x9e78d2, 0xdb8b47, 0x5a9bdb];
-  const chef = [0xf8f4eb, 0xf1eee7, 0xf6f1e7];
   const faceTex = new Map();
 
   function makeMat(color, roughness = 0.98) {
@@ -65,7 +66,6 @@
 
     ctx.fillStyle = skinColor;
     ctx.fillRect(0, 0, 128, 128);
-
     ctx.fillStyle = hairColor;
     ctx.fillRect(0, 0, 128, 26);
     if (role === 'chef') {
@@ -78,10 +78,8 @@
       ctx.fillStyle = '#8ecae6';
       ctx.fillRect(14, 16, 100, 6);
     }
-
     ctx.fillStyle = skinColor;
     ctx.fillRect(14, 26, 100, 90);
-
     ctx.fillStyle = eye;
     ctx.fillRect(34, 52, 10, 10);
     ctx.fillRect(84, 52, 10, 10);
@@ -116,22 +114,97 @@
     for (const s of sprites) root.add(s);
   }
 
-  function rebuild(root) {
-    if (!root || !TARGET_TYPES.has(norm(root.userData?.type)) || root.userData.__mcBuilt) return;
+  function createShadow(opacity = 0.18, radius = 0.4) {
+    const s = new THREE.Mesh(
+      new THREE.CircleGeometry(radius, 24),
+      new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity })
+    );
+    s.rotation.x = -Math.PI / 2;
+    s.position.y = 0.01;
+    return s;
+  }
 
-    const role = norm(root.userData.type);
-    const seed = hash(`${root.userData.type}:${root.position.x.toFixed(3)}:${root.position.z.toFixed(3)}`);
+  function fitModel(model) {
+    model.traverse((obj) => {
+      if (obj && obj.isMesh) {
+        obj.castShadow = true;
+        obj.receiveShadow = true;
+      }
+    });
+    const box3 = new THREE.Box3().setFromObject(model);
+    const size = box3.getSize(new THREE.Vector3());
+    const center = box3.getCenter(new THREE.Vector3());
+    const height = Math.max(size.y, 0.001);
+    const scale = 1.95 / height;
+    model.scale.setScalar(scale);
+    model.position.sub(center);
+    model.position.multiplyScalar(scale);
+    const box4 = new THREE.Box3().setFromObject(model);
+    model.position.y -= box4.min.y;
+  }
+
+  function loadChefModel() {
+    if (!chefModelPromiseCache.has('chef')) {
+      chefModelPromiseCache.set('chef', new Promise((resolve, reject) => {
+        chefLoader.load('Meshy_AI_Meshy_Merged_Animations.glb', resolve, undefined, reject);
+      }));
+    }
+    return chefModelPromiseCache.get('chef');
+  }
+
+  function attachChefModel(root) {
+    if (!root || root.userData.__chefModelApplied) return;
+    root.userData.__chefModelApplied = true;
+
+    const wrapper = root.userData.__chefWrapper || new THREE.Group();
+    wrapper.name = '__rzChefModelWrapper';
+    root.userData.__chefWrapper = wrapper;
+
+    while (root.children.length) root.remove(root.children[0]);
+    root.add(createShadow(0.18, 0.42));
+    root.add(wrapper);
+
+    loadChefModel().then((gltf) => {
+      if (!root || !root.userData.__chefModelApplied) return;
+      while (wrapper.children.length) wrapper.remove(wrapper.children[0]);
+      const source = gltf.scene || gltf.scenes?.[0];
+      const model = THREE.SkeletonUtils && typeof THREE.SkeletonUtils.clone === 'function'
+        ? THREE.SkeletonUtils.clone(source)
+        : source.clone(true);
+      model.name = '__rzChefModel';
+      fitModel(model);
+      wrapper.add(model);
+
+      const clips = Array.isArray(gltf.animations) ? gltf.animations : [];
+      if (clips.length) {
+        const mixer = new THREE.AnimationMixer(model);
+        const clip = clips.find((c) => /idle/i.test(c.name || '')) || clips[0];
+        mixer.clipAction(clip).play();
+        model.userData.__chefMixer = mixer;
+      }
+    }).catch((err) => console.warn('Chef model load failed:', err));
+  }
+
+  function buildChef(root) {
+    root.userData.__mcBuilt = true;
+    root.userData.__chefModelApplied = false;
+    root.visible = true;
+    attachChefModel(root);
+  }
+
+  function buildHumanoid(root, role, seed) {
     clearKeepSprites(root);
 
-    const bodyColor = role === 'chef' ? 0xf8f6f0 : role === 'player' ? 0x4d78b5 : pick(customer, seed, 3);
-    const hairColor = role === 'chef' ? 0x1f1f1f : role === 'player' ? 0x24324c : pick(hair, seed, 2);
+    const bodyColor = role === 'player' ? pick(player, seed, 3) : pick(customer, seed, 3);
+    const hairColor = role === 'player' ? 0x24324c : pick(hair, seed, 2);
     const skinColor = pick(skin, seed, 1);
     const bodyMat = makeMat(bodyColor);
     const skinMat = makeMat(skinColor);
-    const faceMat = new THREE.MeshBasicMaterial({ map: makeFaceTexture(role, seed), transparent: false, side: THREE.FrontSide });
+    const faceMat = new THREE.MeshBasicMaterial({ map: makeFaceTexture(role, seed), side: THREE.FrontSide });
 
     const visual = new THREE.Group();
     visual.position.y = 0.30;
+    root.add(createShadow(0.18, 0.4));
     root.add(visual);
 
     const body = new THREE.Group();
@@ -139,18 +212,14 @@
     visual.add(body);
 
     const head = new THREE.Group();
-    const headCube = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.42, 0.42), [skinMat.clone(), skinMat.clone(), skinMat.clone(), skinMat.clone(), faceMat, skinMat.clone()]);
+    const headCube = new THREE.Mesh(
+      new THREE.BoxGeometry(0.42, 0.42, 0.42),
+      [skinMat.clone(), skinMat.clone(), skinMat.clone(), skinMat.clone(), faceMat, skinMat.clone()]
+    );
     headCube.position.y = 1.22;
     head.add(headCube);
 
-    if (role === 'chef') {
-      box(head, 0.34, 0.12, 0.34, 0xffffff, 0, 1.52, 0);
-      box(head, 0.16, 0.20, 0.16, 0xffffff, -0.10, 1.64, 0);
-      box(head, 0.20, 0.24, 0.20, 0xffffff, 0, 1.72, 0);
-      box(head, 0.16, 0.20, 0.16, 0xffffff, 0.10, 1.64, 0);
-      box(body, 0.22, 0.28, 0.04, 0xe8d9c2, 0, 0.34, 0.15);
-      box(body, 0.10, 0.03, 0.03, 0xb58b5d, 0, 0.20, 0.18);
-    } else if (role === 'player') {
+    if (role === 'player') {
       box(head, 0.34, 0.12, 0.28, 0x24324c, 0, 1.50, 0);
       box(head, 0.38, 0.05, 0.18, 0x8ecae6, 0, 1.44, 0.14);
     } else {
@@ -184,15 +253,17 @@
     armR.position.set(0.30, 1.02, 0);
     visual.add(armR);
 
+    const legColor = role === 'player' ? 0x1d2230 : pick(pants, seed, 4);
+    const shoeColor = role === 'player' ? 0x11151c : 0x11151c;
     const legL = new THREE.Group();
-    box(legL, 0.16, 0.60, 0.16, role === 'chef' ? 0x1f1f1f : 0x1d2230, 0, -0.30, 0);
-    box(legL, 0.20, 0.06, 0.30, role === 'chef' ? 0x1f1f1f : 0x11151c, 0, -0.56, 0.05);
+    box(legL, 0.16, 0.60, 0.16, legColor, 0, -0.30, 0);
+    box(legL, 0.20, 0.06, 0.30, shoeColor, 0, -0.56, 0.05);
     legL.position.set(-0.13, 0.37, 0);
     visual.add(legL);
 
     const legR = new THREE.Group();
-    box(legR, 0.16, 0.60, 0.16, role === 'chef' ? 0x1f1f1f : 0x1d2230, 0, -0.30, 0);
-    box(legR, 0.20, 0.06, 0.30, role === 'chef' ? 0x1f1f1f : 0x11151c, 0, -0.56, 0.05);
+    box(legR, 0.16, 0.60, 0.16, legColor, 0, -0.30, 0);
+    box(legR, 0.20, 0.06, 0.30, shoeColor, 0, -0.56, 0.05);
     legR.position.set(0.13, 0.37, 0);
     visual.add(legR);
 
@@ -232,6 +303,19 @@
       role,
     });
     roots.add(root);
+  }
+
+  function rebuild(root) {
+    if (!root || !TARGET_TYPES.has(norm(root.userData?.type)) || root.userData.__mcBuilt) return;
+    const role = norm(root.userData.type);
+    const seed = hash(`${root.userData.type}:${root.position.x.toFixed(3)}:${root.position.z.toFixed(3)}`);
+
+    if (role === 'chef') {
+      buildChef(root);
+      return;
+    }
+
+    buildHumanoid(root, role, seed);
   }
 
   function animate(root, info) {
