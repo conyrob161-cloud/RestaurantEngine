@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <meta name="theme-color" content="#10131a" />
+  <title>Restaurant Zombie – Block Edition</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/utils/SkeletonUtils.js"></script>
+  <script src="mc_character_patch_v2.js?v=1"></script>
+  <script src="main_v12.js?v=4"></script>
+  <script src="bootstrap_patch.js?v=5"></script>
+  <script>
+    (() => {
+      const roots = new Set();
+      const prev = new WeakMap();
+      const meta = new WeakMap();
+      const base = new WeakMap();
+      const add = THREE.Object3D.prototype.add;
+
+      THREE.Object3D.prototype.add = function (...objs) {
+        for (const obj of objs) {
+          if (!obj || !obj.userData) continue;
+          if (obj.userData.type === 'player' || obj.userData.type === 'chef' || obj.userData.type === 'customer') {
+            roots.add(obj);
+            if (!base.has(obj)) {
+              const parts = { body: null, head: null, hair: null, armL: null, armR: null, legL: null, legR: null, shoeL: null, shoeR: null, hat: null, label: null };
+              for (const child of obj.children || []) {
+                if (child.isSprite) { parts.label = child; continue; }
+                const y = child.position?.y ?? 0;
+                const x = child.position?.x ?? 0;
+                const g = child.geometry?.type || '';
+                if (y > 2.0) parts.hat = child;
+                else if (y > 1.55 && g === 'SphereGeometry' && !parts.head) parts.head = child;
+                else if (y > 1.55 && g === 'SphereGeometry') parts.hair = child;
+                else if (y > 0.9 && g === 'CylinderGeometry' && x < 0) parts.armL = child;
+                else if (y > 0.9 && g === 'CylinderGeometry') parts.armR = child;
+                else if (y > 0.2 && g === 'CylinderGeometry' && x < 0) parts.legL = child;
+                else if (y > 0.2 && g === 'CylinderGeometry') parts.legR = child;
+                else if (y <= 0.2 && g === 'BoxGeometry' && x < 0) parts.shoeL = child;
+                else if (y <= 0.2 && g === 'BoxGeometry') parts.shoeR = child;
+                else if (!parts.body) parts.body = child;
+              }
+              base.set(obj, parts);
+              meta.set(obj, { still: 0, phase: Math.random() * Math.PI * 2 });
+            }
+          }
+        }
+        return add.apply(this, objs);
+      };
+
+      const save = (c) => c ? { p: c.position.clone(), r: c.rotation.clone(), s: c.scale.clone() } : null;
+      const restore = (c, b) => { if (!c || !b) return; c.position.copy(b.p); c.rotation.copy(b.r); c.scale.copy(b.s); };
+
+      function animate(root, mode, t, info) {
+        const parts = base.get(root);
+        if (!parts) return;
+        if (!root.userData.__base) {
+          root.userData.__base = {};
+          for (const [k, c] of Object.entries(parts)) root.userData.__base[k] = save(c);
+        }
+        for (const [k, c] of Object.entries(parts)) restore(c, root.userData.__base[k]);
+
+        const bob = mode === 'walk' ? Math.abs(Math.sin(t * 10 + info.phase)) * 0.05 : Math.sin(t * 2.2 + info.phase) * 0.018;
+        if (parts.body) { parts.body.position.y += bob * 0.5; parts.body.rotation.z += mode === 'walk' ? Math.sin(t * 10 + info.phase) * 0.03 : 0; }
+        if (parts.head) { parts.head.position.y += bob * 0.2; parts.head.rotation.z += mode === 'walk' ? Math.sin(t * 10 + info.phase + 0.6) * 0.05 : Math.sin(t * 1.2 + info.phase) * 0.02; }
+        if (parts.hair) parts.hair.position.y += bob * 0.15;
+
+        if (mode === 'walk') {
+          const swing = Math.sin(t * 10 + info.phase) * 0.7;
+          if (parts.armL) parts.armL.rotation.z += swing * 0.32;
+          if (parts.armR) parts.armR.rotation.z -= swing * 0.32;
+          if (parts.legL) parts.legL.rotation.z += swing * 0.42;
+          if (parts.legR) parts.legR.rotation.z -= swing * 0.42;
+          if (parts.shoeL) parts.shoeL.rotation.z += swing * 0.12;
+          if (parts.shoeR) parts.shoeR.rotation.z -= swing * 0.12;
+        }
+
+        if (mode === 'eat') {
+          const chew = Math.sin(t * 6 + info.phase) * 0.04;
+          if (parts.body) parts.body.rotation.x += 0.12 + chew;
+          if (parts.head) parts.head.rotation.x += 0.08 + chew * 1.2;
+          if (parts.armR) parts.armR.rotation.x -= 0.85 + chew;
+          if (parts.armL) parts.armL.rotation.x -= 0.22;
+          if (parts.armR) parts.armR.rotation.z -= 0.18;
+          if (parts.armL) parts.armL.rotation.z += 0.08;
+        }
+
+        if (parts.hat && mode !== 'walk') parts.hat.rotation.z += Math.sin(t * 1.2 + info.phase) * 0.02;
+        if (parts.label) parts.label.position.y += mode === 'walk' ? bob * 0.1 : Math.sin(t * 1.6 + info.phase) * 0.01;
+      }
+
+      function tick(now) {
+        const t = now / 1000;
+        for (const root of roots) {
+          try {
+            const p = prev.get(root) || root.position.clone();
+            const speed = root.position.distanceTo(p);
+            prev.set(root, root.position.clone());
+            const info = meta.get(root) || { still: 0, phase: 0 };
+            info.still = speed < 0.015 ? info.still + 1 / 60 : 0;
+            let mode = 'idle';
+            if (speed > 0.03) mode = 'walk';
+            else if (root.userData.type === 'customer' && info.still > 1.1) mode = 'eat';
+            animate(root, mode, t, info);
+            meta.set(root, info);
+          } catch {}
+        }
+        requestAnimationFrame(tick);
+      }
+
+      requestAnimationFrame(tick);
+    })();
+  </script>
+</head>
+<body>
+  <div id="app">
+    <canvas id="game" aria-label="3D game canvas"></canvas>
+
+    <div class="hud">
+      <div class="panel">
+        <div class="panel-title">Restaurant Zombie</div>
+        <div class="stats">
+          <div><span>Peníze</span><strong id="money">0</strong></div>
+          <div><span>Suroviny</span><strong id="stock">0</strong></div>
+          <div><span>Neseno</span><strong id="carry">0</strong></div>
+          <div><span>V peci</span><strong id="oven">0</strong></div>
+          <div><span>Čeká</span><strong id="waiting">0</strong></div>
+          <div><span>Reputace</span><strong id="rep">0</strong></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="top-actions">
+      <button id="spawnBtn">Přivolat hosta</button>
+      <button id="buyStockBtn">Suroviny (5)</button>
+      <button id="upgradeCarryBtn" class="secondary">Kapacita (90)</button>
+      <button id="upgradeOvenBtn" class="secondary">Kuchyň (20)</button>
+      <button id="saveBtn" class="ghost">Uložit</button>
+      <button id="resetBtn" class="ghost">Reset</button>
+      <button id="actionBtn" class="action">E</button>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <div class="footer">
+      <div class="help">
+        Ovládání: WASD / šipky nebo plovoucí joystick vlevo. E / tlačítko vpravo = interakce.
+        Jídlo zůstává na stole, dokud ho host nesní.
+      </div>
+    </div>
+
+    <div class="mobile-controls">
+      <div class="stick" id="stick"><div class="nub" id="nub"></div></div>
+    </div>
+  </div>
+  <script src="main_v12.js?v=4"></script>
+</body>
+</html>
