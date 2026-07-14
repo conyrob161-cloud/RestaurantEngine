@@ -11,7 +11,8 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/utils/SkeletonUtils.js"></script>
   <script src="mc_character_patch.js?v=1"></script>
   <script src="main_v12.js?v=3"></script>
-  <script src="bootstrap_patch.js?v=3"></script>
+  <script src="bootstrap_patch.js?v=4"></script>
+  <script src="zombie_patch.js?v=3"></script>
   <script>
     (() => {
       const roots = new Set();
@@ -136,10 +137,11 @@
     <div class="top-actions">
       <button id="spawnBtn">Přivolat hosta</button>
       <button id="buyStockBtn">Suroviny (5)</button>
-      <button id="upgradeCarryBtn" class="secondary">Kapacita</button>
-      <button id="upgradeOvenBtn" class="secondary">Pec</button>
+      <button id="upgradeCarryBtn" class="secondary">Kapacita (90)</button>
+      <button id="upgradeOvenBtn" class="secondary">Kuchyň (20)</button>
       <button id="saveBtn" class="ghost">Uložit</button>
       <button id="resetBtn" class="ghost">Reset</button>
+      <button id="actionBtn" class="action">E</button>
     </div>
 
     <div class="toast" id="toast"></div>
@@ -149,7 +151,6 @@
         Ovládání: WASD / šipky nebo plovoucí joystick vlevo. E / tlačítko vpravo = interakce.
         Jídlo zůstává na stole, dokud ho host nesní.
       </div>
-      <button id="actionBtn" class="action">E</button>
     </div>
 
     <div class="mobile-controls">
@@ -157,6 +158,5 @@
     </div>
   </div>
   <script src="main_v12.js?v=3"></script>
-  <script src="bootstrap_patch.js?v=3"></script>
 </body>
 </html>
