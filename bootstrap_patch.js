@@ -43,5 +43,5 @@
     return originalPush.apply(this, items);
   };
 
-  document.write('<script src="zombie_patch.js?v=1"><\/script>');
+  document.write('<script src="zombie_patch.js?v=2"><\/script>');
 })();
